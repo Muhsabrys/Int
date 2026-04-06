@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generation Mechanics — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,600&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../index.html">Home</a></li>
+      <li><a href="../index.html#tracks">Tracks</a></li>
+      <li><a href="../index.html#about">About</a></li>
+    </ul>
+  </div>
+</nav>
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">In This Lesson</span>
+    <ul class="sidebar-nav">
+      <li><a href="#metadata">Metadata</a></li>
+      <li><a href="#outcomes">Learning Outcomes</a></li>
+      <li><a href="#setup">Conceptual Setup</a></li>
+      <li><a href="#intuition">Intuition First</a></li>
+      <li><a href="#technical">Technical Core</a></li>
+      <li><a href="#worked-example">Worked Example</a></li>
+      <li><a href="#mechint">Mech. Interpretation</a></li>
+      <li><a href="#exercise">Hands-on Exercise</a></li>
+      <li><a href="#artifact">Real Model Artifact</a></li>
+      <li><a href="#assessment">Assessment Check</a></li>
+      <li><a href="#references">References</a></li>
+      <li><a href="#next">Next Step</a></li>
+    </ul>
+  </aside>
+  <main class="lesson-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span>›</span>
+      <a href="../index.html#tracks">Track 2: Architecture</a>
+      <span>›</span>
+      Generation Mechanics
+    </div>
+    <!-- ═══════════════════════════════════════════════════ METADATA -->
+    <section id="metadata" class="lesson-section">
+      <h2>Generation Mechanics</h2>
+      <p style="font-family:var(--mono);font-size:0.8rem;color:#8a8680;margin-bottom:1.5rem;">Lesson 3 of 3 · Track 2: Architecture</p>
+      <div class="meta-box">
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Track</div>
+          <div style="font-weight:400;">Track 2: Architecture</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Lesson</div>
+          <div style="font-weight:400;">#3 of 3</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Prerequisites</div>
+          <div style="font-weight:400;">Track 2, Lessons 1–2: Attention &amp; MLP Mechanics</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Est. Time</div>
+          <div style="font-weight:400;">55 minutes</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Modalities</div>
+          <div style="font-weight:400;">Text · Vision · Speech</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Accent</div>
+          <div style="font-weight:400;color:var(--teal);">Teal — Architecture</div>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ OUTCOMES -->
+    <section id="outcomes" class="lesson-section">
+      <h2>Learning Outcomes</h2>
+      <p>This lesson closes Track 2 by examining how trained transformers produce outputs at inference time. You will master the generation loop, the KV cache mechanism, and the full spectrum of decoding strategies — then connect these to interpretability probes like surprisal analysis and output entropy tracking.</p>
+      <ul class="outcomes-list">
+        <li>Write out the autoregressive factorization P(x₁,…,xₙ) = Π P(xₜ | x₁,…,xₜ₋₁) and explain why prefill and decode phases are computationally distinct.</li>
+        <li>Describe how the KV cache works, calculate its memory footprint for GPT-2-small at a given context length, and explain what information it stores.</li>
+        <li>Compare greedy decoding, temperature sampling, top-k, top-p (nucleus), and beam search on dimensions of determinism, diversity, coherence, and cost.</li>
+        <li>Implement a manual generation loop in PyTorch that records per-step log-probabilities and output entropy.</li>
+        <li>Define surprisal (−log P(token | context)) and explain how it can serve as a knowledge probe for factual completions.</li>
+        <li>Distinguish between high-confidence correct generation and high-confidence incorrect generation (hallucination) and explain why log-probability alone cannot distinguish them.</li>
+        <li>Identify what output distribution entropy at a given step implies about the model's downstream behavior, and name two causes of sudden entropy spikes mid-generation.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ SETUP -->
+    <section id="setup" class="lesson-section">
+      <h2>Conceptual Setup</h2>
+      <p>Generation mechanics describes how a trained transformer model is used at inference time to produce output sequences. For language models, this means autoregressively predicting one token at a time, each prediction conditioned on all previous tokens. Understanding generation mechanics is essential for mechanistic interpretability for three reasons:</p>
+      <ol style="padding-left:1.5rem;margin:1rem 0;">
+        <li style="margin-bottom:0.6rem;"><strong>The generation loop is where model behavior manifests.</strong> All the circuit-level computation studied in Lessons 1 and 2 ultimately produces a logit distribution over the vocabulary at each step. The generation loop is the observable output of the entire model's computation.</li>
+        <li style="margin-bottom:0.6rem;"><strong>Different decoding strategies produce qualitatively different behaviors from the same model.</strong> A model that generates factually accurate text with greedy decoding may hallucinate under high-temperature sampling. Understanding decoding is understanding one degree of freedom that separates model capability from model behavior.</li>
+        <li style="margin-bottom:0.6rem;"><strong>The KV cache makes causal analysis tractable.</strong> Because the KV cache stores the K and V representations for all previous tokens, researchers can intervene at specific positions without re-running the full computation. Activation patching at generation time exploits this structure.</li>
+      </ol>
+      <div class="callout callout-teal">
+        <span class="callout-label">Track 2 Synthesis</span>
+        <p>The generation loop combines everything from Lessons 1 and 2. Attention heads (Lesson 1) route information from KV-cached past tokens to the current position. MLP layers (Lesson 2) apply factual knowledge and transformations at the current position. The final unembedding (Track 1, Lesson 4) converts the residual stream to logits. Decoding strategy determines which logit becomes the next token. This is the complete picture of autoregressive language modeling.</p>
+      </div>
+      <p>The KV cache is a memory-compute tradeoff: by caching the key and value matrices for all past tokens, the model avoids recomputing attention for the entire context at every generation step. Without caching, generation would require O(T²) attention computation; with caching, each new token requires only O(T) attention (one token attends to T cached keys/values). For long-context generation, this is the primary enabler of practical inference.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ INTUITION -->
+    <section id="intuition" class="lesson-section">
+      <h2>Intuition First</h2>
+      <p>Imagine a person completing a sentence one word at a time, checking their full sentence so far before each new word. That's autoregressive generation. They don't re-read from scratch every time — they remember what they've written. That memory is the KV cache.</p>
+      <p>The <strong>KV cache</strong> is like a notepad where the model writes down what it computed about each past token (specifically: the key and value vectors for each attention head at each layer). When generating the next token, the model only needs to compute the query for the new position and look up its attention weights over the cached keys — it doesn't reprocess any previous token.</p>
+      <div class="callout callout-amber">
+        <span class="callout-label">Sampling as Decision-Making</span>
+        <p>The decoding strategy is how the model "decides" which word to say next. Greedy always picks the most probable word — boring but reliable. Temperature makes the model more adventurous by flattening the distribution (high T) or sharpening it (low T). Top-p stops the model from ever considering very unlikely choices, regardless of how many tokens it would take. Beam search thinks multiple steps ahead before committing.</p>
+      </div>
+      <p>Intuition for <strong>top-p (nucleus) sampling</strong>: rather than always taking the top k tokens (fixed count), nucleus sampling takes the minimum set of tokens whose cumulative probability exceeds p. On a high-confidence step (e.g., "The capital of France is ___"), the top 1 token may already account for 70% of the probability, so nucleus sampling with p=0.9 would include only 3–4 tokens. On a creative or uncertain step, the top 50 tokens might collectively only account for 90%, so nucleus sampling naturally includes more options. This adaptive behavior is why top-p is preferred over top-k for most generation tasks.</p>
+      <p>Intuition for <strong>output entropy as an interpretability signal</strong>: if the model is confident (low entropy), it has strongly committed to a direction. This can be a positive signal (strong factual knowledge) or a warning sign (overconfident hallucination). If the model is uncertain (high entropy), it is in a regime where the generation will be less predictable and more sensitive to sampling stochasticity. Tracking entropy step-by-step during generation reveals when the model is "deciding" vs. "filling in" — high-entropy steps are the semantically critical decision points.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ TECHNICAL -->
+    <section id="technical" class="lesson-section">
+      <h2>Technical Core</h2>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">Autoregressive Factorization</h3>
+      <div class="ascii-diagram">Joint probability factorization:
+  P(x₁, x₂, ..., xₙ) = P(x₁) · P(x₂ | x₁) · P(x₃ | x₁,x₂) · ... · P(xₙ | x₁,...,xₙ₋₁)
+                       = ∏_{t=1}^{n} P(xₜ | x₁, ..., xₜ₋₁)
+Each factor P(xₜ | context) is computed by:
+  1. Forward pass on {x₁,...,xₜ₋₁} → residual stream at position t-1
+  2. Unembedding: logits = residual_stream · W_U^T     (V-dimensional)
+  3. Softmax: probs = softmax(logits)                  (V-dimensional distribution)
+  4. Sample/select: xₜ ~ probs  (or argmax for greedy)</div>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">The Generation Loop with KV Cache</h3>
+      <div class="ascii-diagram">PREFILL PHASE: process all prompt tokens in parallel
+──────────────────────────────────────────────────────
+Prompt: [x₁, x₂, ..., xₙ]
+  ↓  Single forward pass (full attention, all positions)
+  ↓  For each layer l, each head h:
+     KV_cache[l][h] = { K: (n, d_k), V: (n, d_k) }
+  ↓  Logits at position xₙ  →  first generated token x_{n+1}
+DECODE PHASE: one token at a time
+──────────────────────────────────────────────────────
+For step t = n+1, n+2, ..., until EOS or max_length:
+  Input: single token x_t  (shape: (1, 1))
+    ↓
+  Embedding: e_t ∈ ℝ^d
+    ↓
+  For each layer l:
+    Q_t = e_t · W_Q              (query for new position)
+    Attend over KV_cache[l]:     attn(Q_t, K_{1:t}, V_{1:t})
+    Update residual stream
+    Apply MLP
+    Append K_t, V_t to KV_cache[l]
+    ↓
+  logits = residual_state · W_U^T    (V = 50257 logits)
+    ↓
+  Apply decoding strategy
+    ↓
+  x_{t+1} ← sample / argmax
+    ↓
+  (repeat)</div>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">KV Cache Memory Footprint</h3>
+      <div class="ascii-diagram">Memory per token (GPT-2-small):
+  Layers:   L = 12
+  Heads:    H = 12
+  d_k:      64 (per head)
+  K and V:  2 tensors
+  dtype:    float16 = 2 bytes
+  Per-token memory = L × H × d_k × 2 × 2 bytes
+                   = 12 × 12 × 64 × 2 × 2
+                   = 73,728 bytes ≈ 72 KB per token
+  For 512-token context:
+  Total KV cache = 72 KB × 512 = 36,864 KB ≈ 36 MB
+  For GPT-3 (96 layers, 96 heads, d_k=128, float16):
+  Per-token = 96 × 96 × 128 × 2 × 2 = 4,718,592 bytes ≈ 4.5 MB per token
+  For 2048 tokens: ~9.2 GB KV cache  ← memory bottleneck for long contexts</div>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">Decoding Strategy Comparison</h3>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Strategy</th>
+            <th>Deterministic?</th>
+            <th>Diversity</th>
+            <th>Repetition Risk</th>
+            <th>Best For</th>
+            <th>Compute Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Greedy</td>
+            <td>Yes</td>
+            <td>None</td>
+            <td>High</td>
+            <td>Factual QA, code</td>
+            <td>1× (baseline)</td>
+          </tr>
+          <tr>
+            <td>Temperature (T&lt;1)</td>
+            <td>No</td>
+            <td>Low–medium</td>
+            <td>Medium</td>
+            <td>Factual with variety</td>
+            <td>1×</td>
+          </tr>
+          <tr>
+            <td>Temperature (T&gt;1)</td>
+            <td>No</td>
+            <td>High</td>
+            <td>Low</td>
+            <td>Creative writing</td>
+            <td>1×</td>
+          </tr>
+          <tr>
+            <td>Top-k (k=50)</td>
+            <td>No</td>
+            <td>Medium</td>
+            <td>Medium</td>
+            <td>General purpose</td>
+            <td>1×</td>
+          </tr>
+          <tr>
+            <td>Top-p (p=0.9)</td>
+            <td>No</td>
+            <td>Adaptive</td>
+            <td>Low–medium</td>
+            <td>Open-ended generation</td>
+            <td>1×</td>
+          </tr>
+          <tr>
+            <td>Beam search (k=4)</td>
+            <td>Yes</td>
+            <td>Low</td>
+            <td>High</td>
+            <td>Translation, summarization</td>
+            <td>k×</td>
+          </tr>
+          <tr>
+            <td>Contrastive decoding</td>
+            <td>No</td>
+            <td>Medium</td>
+            <td>Low</td>
+            <td>Factual accuracy</td>
+            <td>2× (two models)</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">Output Distribution Entropy</h3>
+      <div class="ascii-diagram">Shannon entropy of the output distribution at step t:
+  H_t = − Σ_{v=1}^{V} p_t(v) · log₂ p_t(v)    (bits)
+  Calibration:
+    H = 0:         perfectly certain (argmax = 1.0)
+    H = 1 bit:     two tokens each at ~50%
+    H = log₂(V):  fully uniform over V tokens   (V = 50257 → 15.6 bits for GPT-2)
+  Practical ranges in GPT-2-small:
+    Factual completions:  H ≈ 1–4 bits   (confident)
+    Common continuations: H ≈ 4–8 bits   (moderate)
+    Open-ended positions: H ≈ 8–12 bits  (uncertain)
+    Degenerate state:     H > 12 bits    (near-uniform, possible OOD)</div>
+      <div class="callout callout-violet">
+        <span class="callout-label">Repetition Penalty</span>
+        <p>A common generation artifact is repetitive output (the model keeps generating the same phrase). This happens because once a token is generated, its key-value entries in the KV cache provide a strong attractor for the same token to appear again. Repetition penalty (Keskar et al. 2019) addresses this by scaling down logits for tokens that have already appeared: logit(v) /= penalty if v in past tokens (penalty &gt; 1 reduces probability of repeats).</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ WORKED EXAMPLE -->
+    <section id="worked-example" class="lesson-section">
+      <h2>Worked Example</h2>
+      <p>We implement a manual generation loop with per-step log-probability and entropy logging, then compare greedy and nucleus sampling on a factual prompt.</p>
+      <ol class="step-list">
+        <li class="step-item">
+          <span class="step-pill">01</span>
+          <span class="step-text">Implement a manual generation loop that does NOT call <code>model.generate()</code> — instead, call <code>model(generated)</code> at each step, extract logits, and choose the next token manually.</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">02</span>
+          <span class="step-text">At each step, record: (a) the greedy-selected token and its log-probability; (b) the entropy of the full distribution; (c) the top-5 candidate tokens and their probabilities.</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">03</span>
+          <span class="step-text">Compare the entropy profile for a factual prompt ("The Eiffel Tower is located in") vs. a creative prompt ("Once upon a time") — factual should show lower entropy at the key decision step.</span>
+        </li>
+      </ol>
+      <pre class="code-block"><span class="kw">import</span> torch
+<span class="kw">from</span> transformers <span class="kw">import</span> GPT2LMHeadModel, GPT2Tokenizer
+<span class="kw">import</span> math
+model = GPT2LMHeadModel.from_pretrained(<span class="st">"gpt2"</span>)
+tok = GPT2Tokenizer.from_pretrained(<span class="st">"gpt2"</span>)
+model.eval()
+<span class="kw">def</span> <span class="fn">entropy_bits</span>(probs):
+    <span class="st">"""Shannon entropy in bits."""</span>
+    eps = <span class="nu">1e-10</span>
+    return -torch.sum(probs * torch.log2(probs + eps)).item()
+<span class="kw">def</span> <span class="fn">manual_generate</span>(prompt, n_steps=<span class="nu">10</span>, strategy=<span class="st">"greedy"</span>, temperature=<span class="nu">1.0</span>, top_p=<span class="nu">0.9</span>):
+    input_ids = tok.encode(prompt, return_tensors=<span class="st">"pt"</span>)
+    generated = input_ids.clone()
+    history = []
+    <span class="kw">for</span> step <span class="kw">in</span> range(n_steps):
+        <span class="kw">with</span> torch.no_grad():
+            out = model(generated)
+        logits = out.logits[<span class="nu">0</span>, -<span class="nu">1</span>, :]       <span class="cm"># logits for next token</span>
+        <span class="cm"># Temperature scaling</span>
+        <span class="kw">if</span> temperature != <span class="nu">1.0</span>:
+            logits = logits / temperature
+        probs = torch.softmax(logits, dim=-<span class="nu">1</span>)
+        H = entropy_bits(probs)
+        top5 = probs.topk(<span class="nu">5</span>)
+        top5_tokens = [tok.decode([i]) <span class="kw">for</span> i <span class="kw">in</span> top5.indices]
+        <span class="kw">if</span> strategy == <span class="st">"greedy"</span>:
+            next_token = probs.argmax().unsqueeze(<span class="nu">0</span>)
+        <span class="kw">elif</span> strategy == <span class="st">"top_p"</span>:
+            <span class="cm"># Nucleus sampling: keep tokens until cumulative prob > top_p</span>
+            sorted_probs, sorted_idx = probs.sort(descending=<span class="nu">True</span>)
+            cumulative = sorted_probs.cumsum(dim=-<span class="nu">1</span>)
+            mask = cumulative - sorted_probs > top_p
+            sorted_probs[mask] = <span class="nu">0.0</span>
+            sorted_probs /= sorted_probs.sum()
+            next_sorted = torch.multinomial(sorted_probs, <span class="nu">1</span>)
+            next_token = sorted_idx[next_sorted]
+        <span class="kw">else</span>:
+            next_token = torch.multinomial(probs, <span class="nu">1</span>)
+        log_prob = math.log(probs[next_token[<span class="nu">0</span>]].item() + <span class="nu">1e-10</span>)
+        token_str = tok.decode([next_token[<span class="nu">0</span>].item()])
+        history.append({
+            <span class="st">'token'</span>: token_str,
+            <span class="st">'log_prob'</span>: log_prob,
+            <span class="st">'entropy'</span>: H,
+            <span class="st">'top5'</span>: list(zip(top5_tokens, top5.values.tolist()))
+        })
+        generated = torch.cat([generated, next_token.unsqueeze(<span class="nu">0</span>)], dim=<span class="nu">1</span>)
+    <span class="kw">return</span> history
+<span class="cm"># Run on factual prompt</span>
+factual = <span class="st">"The Eiffel Tower is located in"</span>
+hist_factual = manual_generate(factual, n_steps=<span class="nu">8</span>, strategy=<span class="st">"greedy"</span>)
+<span class="fn">print</span>(<span class="st">"Factual prompt — greedy generation:"</span>)
+<span class="fn">print</span>(<span class="st">f"{'Step':>4}  {'Token':>12}  {'log_p':>7}  {'H(bits)':>8}  Top-2"</span>)
+<span class="kw">for</span> i, h <span class="kw">in</span> enumerate(hist_factual):
+    top2 = [f<span class="st">"{t!r}={v:.3f}"</span> <span class="kw">for</span> t, v <span class="kw">in</span> h[<span class="st">'top5'</span>][:<span class="nu">2</span>]]
+    <span class="fn">print</span>(<span class="fn">f</span><span class="st">"{i+1:>4}  {h['token']!r:>12}  {h['log_prob']:>7.3f}  {h['entropy']:>8.2f}  {', '.join(top2)}"</span>)
+<span class="cm"># Run on creative prompt for comparison</span>
+creative = <span class="st">"Once upon a time"</span>
+hist_creative = manual_generate(creative, n_steps=<span class="nu">8</span>, strategy=<span class="st">"greedy"</span>)
+<span class="fn">print</span>(<span class="st">"\nCreative prompt — greedy generation:"</span>)
+<span class="fn">print</span>(<span class="st">f"{'Step':>4}  {'Token':>12}  {'log_p':>7}  {'H(bits)':>8}"</span>)
+<span class="kw">for</span> i, h <span class="kw">in</span> enumerate(hist_creative):
+    <span class="fn">print</span>(<span class="fn">f</span><span class="st">"{i+1:>4}  {h['token']!r:>12}  {h['log_prob']:>7.3f}  {h['entropy']:>8.2f}"</span>)
+<span class="cm"># Step 2: Nucleus sampling comparison
+# High-level API for convenience</span>
+output = model.generate(
+    tok.encode(factual, return_tensors=<span class="st">"pt"</span>),
+    max_new_tokens=<span class="nu">20</span>,
+    do_sample=<span class="nu">True</span>,
+    top_p=<span class="nu">0.9</span>,
+    temperature=<span class="nu">0.8</span>,
+    repetition_penalty=<span class="nu">1.1</span>,
+    pad_token_id=tok.eos_token_id
+)
+<span class="fn">print</span>(<span class="st">"\nTop-p (0.9) + temp (0.8) generation:"</span>)
+<span class="fn">print</span>(tok.decode(output[<span class="nu">0</span>], skip_special_tokens=<span class="nu">True</span>))
+<span class="cm"># Expected: factual prompt step 1 should have very low entropy (< 4 bits)
+# and log_prob close to 0 for "Paris" or "the city of Paris"
+# Creative prompt should show H > 8 bits at most steps</span></pre>
+      <p>Typical observation: for "The Eiffel Tower is located in", the greedy first token is " Paris" or " the" with log_prob ≈ −0.5 to −1.2 and entropy ≈ 2–5 bits. For "Once upon a time", first generated tokens like " there", " a", or " in" show entropy ≈ 8–11 bits — the model is much less certain about what comes next.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ MECHINT -->
+    <section id="mechint" class="lesson-section">
+      <h2>Mechanistic Interpretation Layer</h2>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Text: Surprisal as a Knowledge Probe</h3>
+      <p><strong>What is measured:</strong> The surprisal −log₂ P(token | context) for the final token in a factual completion. For "The capital of France is Paris" vs. "The capital of France is Berlin", the correct completion should have lower surprisal (higher probability). The difference in surprisal is the model's "knowledge signal."</p>
+      <p><strong>The LAMA benchmark:</strong> Petroni et al. 2019 (LAMA: Language Model Analysis) systematically tested whether LLMs have factual knowledge by measuring the log-probability of correct vs. incorrect factual completions. GPT-2-large assigns log P(" Paris") ≈ −0.84 given "The capital of France is", vs. log P(" Berlin") ≈ −3.2 — a clear knowledge signal of ~2.4 log-units.</p>
+      <p><strong>Why it matters:</strong> Surprisal provides a continuous, differentiable measure of model confidence in factual claims. It can be computed without any model modification or intervention. The surprisal profile across a full sentence (per-token surprisal) reveals which tokens are unpredictable and therefore informationally dense.</p>
+      <p><strong>Caution:</strong> High confidence does not equal truth. Models can be confidently wrong (hallucination). Log-probability is also influenced by token frequency in training data — a rare but correct completion may have higher surprisal than a common but incorrect one. Additionally, surprisal is a function of the tokenizer: multi-token words ("photosynthesis" → ["photo", "synth", "esis"]) have lower per-token surprisal than single-token words because the subsequent tokens are highly predictable given the first. Always normalize for tokenization artifacts when comparing surprisal across different words.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Vision: Autoregressive Image Generation Entropy</h3>
+      <p><strong>What is measured:</strong> Per-step entropy of the pixel distribution in autoregressive image models (iGPT / ImageGPT). These models generate images in raster-scan order (left to right, top to bottom), treating pixel values as a discrete vocabulary (quantized to 512 colors). The entropy of the distribution at each pixel position reflects the model's uncertainty.</p>
+      <p><strong>Entropy as a visual "difficulty map":</strong></p>
+      <ul>
+        <li><strong>Smooth regions:</strong> Very low entropy — the next pixel is highly predictable given neighboring pixels of the same color/texture. The model has essentially memorized the texture pattern.</li>
+        <li><strong>Edges and boundaries:</strong> Higher entropy — the model is making a harder decision about whether the region transitions to a new object or continues the current one.</li>
+        <li><strong>Object interiors at early steps:</strong> Very high entropy — before any context from the object has been generated, the model is highly uncertain.</li>
+      </ul>
+      <p><strong>Why it matters:</strong> The entropy map serves as an implicit saliency map — regions of high entropy are where the model is making the hardest decisions. This connects visual uncertainty to attention head behavior (which patches contribute information to these high-entropy decisions?).</p>
+      <p><strong>Caution:</strong> Pixel-level entropy in autoregressive image models reflects low-level statistical structure (texture regularity, color continuity) rather than semantic content. A uniform-colored wall has very low entropy not because it is semantically unimportant, but because its texture is trivially predictable. Do not equate low generation entropy with semantic unimportance.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Speech: TTS Autoregressive Generation (VALL-E)</h3>
+      <p><strong>What is measured:</strong> Per-step token probability and attention patterns in VALL-E (Wang et al. 2023), a neural TTS model that generates speech by autoregressively producing acoustic codec tokens conditioned on text and a speaker prompt.</p>
+      <p><strong>How VALL-E works mechanistically:</strong></p>
+      <ul>
+        <li><strong>Input:</strong> Text tokens + speaker prompt audio (encoded as codec tokens).</li>
+        <li><strong>Generation:</strong> Autoregressively produce acoustic codec tokens. Each token represents ~12.5ms of audio at multiple quantization levels (RVQ codes).</li>
+        <li><strong>Attention function:</strong> Cross-attention heads copy speaker-specific style features from the prompt (timbre, prosody, speaking rate). Self-attention heads implement text-to-speech alignment — each decoder step attends to the relevant portion of the text.</li>
+      </ul>
+      <p><strong>Mechanistic question:</strong> Which attention heads in VALL-E implement text-to-speech alignment vs. speaker style copying? Preliminary analysis suggests that different decoder heads specialize in these two functions, analogous to the specialization of attention heads in language models.</p>
+      <p><strong>Caution:</strong> TTS models are multimodal input-output — the input includes both text (discrete tokens) and audio (codec tokens), and the output is audio. Causal tracing in this setting is more complex because interventions on text tokens affect a different modality than interventions on audio prompts. Standard activation patching from LM research requires adaptation for multimodal settings.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ EXERCISE -->
+    <section id="exercise" class="lesson-section">
+      <h2>Hands-on Exercise</h2>
+      <div class="exercise-box">
+        <h3>Exercise: Compare Decoding Strategies on Diverse Prompts</h3>
+        <p><strong>Task:</strong> Compare greedy, temperature sampling, and top-p sampling on 3 different prompts and analyze the entropy and log-probability profiles.</p>
+        <ol class="step-list">
+          <li class="step-item">
+            <span class="step-pill">01</span>
+            <span class="step-text"><strong>Choose 3 prompts:</strong> (a) Factual — "The speed of light is approximately"; (b) Creative — "Once upon a time in a land far"; (c) Technical — "import numpy as np\n# This function computes"</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">02</span>
+            <span class="step-text"><strong>Generate with 4 strategies:</strong> Greedy (T=1, deterministic), Low temperature (T=0.3), High temperature (T=1.2), Top-p (p=0.9, T=1.0). For each strategy and prompt, generate 15 tokens.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">03</span>
+            <span class="step-text"><strong>Record per-step metrics:</strong> Log-probability of the selected token, entropy of the full distribution (before truncation/sampling), and the text of the selected token.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">04</span>
+            <span class="step-text"><strong>Compute step-1 entropy:</strong> For each prompt, measure the entropy of the distribution at step 1 (before any generation). This is the model's "prior uncertainty" for each prompt type. Rank the 3 prompts by step-1 entropy.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">05</span>
+            <span class="step-text"><strong>Coherence assessment:</strong> Read the 4 outputs for each prompt. Rate each output's factual accuracy / coherence on a 1–3 scale. Does greedy always win on factual prompts? Does top-p win on creative prompts?</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">06</span>
+            <span class="step-text"><strong>KV cache analysis:</strong> For the factual prompt, run the generation twice — once with the standard generation loop and once by manually recomputing from scratch at each step (no KV cache). Verify the outputs are identical. Time both approaches: the manual recomputation should be significantly slower for long sequences.</span>
+          </li>
+        </ol>
+        <p><strong>Expected output:</strong> Factual prompt step-1 entropy should be substantially lower than creative prompt (4 vs. 10+ bits). Greedy should achieve highest log-probability per step but lowest diversity. T=1.2 will produce the most creative but occasionally incoherent outputs.</p>
+        <p><strong>Success criteria:</strong> Correctly identify the highest-entropy prompt at step 1. Demonstrate that greedy and T=0.3 produce identical or near-identical outputs on the factual prompt (both converge to the high-probability token). Verify that top-p with p=0.9 produces more diverse outputs than greedy across 5 repeated runs.</p>
+        <p><strong>Reflection:</strong> Why might top-p be preferred over top-k for most tasks? When would beam search be better than sampling? Under what conditions would you use a repetition penalty?</p>
+        <p><strong>Stretch:</strong> Implement a minimal contrastive decoding variant: run the factual prompt through both GPT-2-small and GPT-2-large. Subtract the small model's log-probs from the large model's log-probs before sampling. Observe if factual accuracy of "The speed of light is ___" improves. (Correct: ~299,792 km/s or 3×10⁸ m/s)</p>
+        <div class="callout callout-rose">
+          <span class="callout-label">Common Confusion</span>
+          <p>Temperature scaling and top-p are <em>applied sequentially</em>, not as alternatives. A typical generation setup uses temperature first (rescale logits) and then top-p (truncate the tail). Applying both simultaneously is valid and common. Greedy decoding is equivalent to temperature → 0 (argmax) with top-p = 1.0 (no truncation).</p>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ ARTIFACT -->
+    <section id="artifact" class="lesson-section">
+      <h2>Real Model Artifact</h2>
+      <p>Quantitative benchmarks from published work on GPT-2 and nucleus sampling:</p>
+      <div class="callout callout-teal">
+        <span class="callout-label">GPT-2 Generation Benchmarks</span>
+        <p>GPT-2-small on Penn Treebank: mean per-token log-probability ≈ −3.56 (perplexity ≈ 35). On WebText held-out data: perplexity ≈ 29.4. These are lower bounds on surprisal for in-distribution text — out-of-distribution prompts (technical documentation, mathematical notation) will show substantially higher surprisal.</p>
+      </div>
+      <div class="callout callout-violet">
+        <span class="callout-label">Factual Completion Log-Probabilities</span>
+        <p>For GPT-2-large on LAMA factual probes: log P(" Paris") ≈ −0.84 given "The capital of France is". This corresponds to P ≈ 0.43 — the model assigns 43% probability to " Paris" (correct). The runner-up candidates (" Lyon" ≈ 0.12, " France" ≈ 0.08) have substantially lower probability, indicating a clear knowledge signal. For less well-represented facts (e.g., capital of Burkina Faso), the correct answer may not even appear in the top-10 predictions.</p>
+      </div>
+      <p><strong>KV cache memory calculation for GPT-2-small at 512 tokens:</strong></p>
+      <ul>
+        <li>12 layers × 12 heads × 64 d_k × 2 (K and V) × 2 bytes (float16) × 512 tokens</li>
+        <li>= 12 × 12 × 64 × 2 × 2 × 512 = 18,874,368 bytes ≈ 18.9 MB</li>
+      </ul>
+      <p><strong>Holtzman et al. 2020 "The Curious Case of Neural Text Degeneration"</strong> introduced nucleus sampling (top-p) and demonstrated quantitatively that greedy and beam search degenerate on long-form generation — they produce repetitive text that diverges from human writing quality after ~100 tokens. Nucleus sampling maintains the "human-like" distribution because it does not always select the mode, allowing controlled exploration of the distribution tail.</p>
+      <p><strong>Speculative Decoding (Chen et al. 2023):</strong> A generation efficiency technique where a small "draft" model generates k tokens speculatively, and the large "verifier" model checks all k tokens in parallel (exploiting the prefill phase's parallelism). If the verifier agrees, all k tokens are accepted in one step — effectively k× throughput improvement at matched quality. This works because the KV cache can be computed in parallel for the draft tokens.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ ASSESSMENT -->
+    <section id="assessment" class="lesson-section">
+      <h2>Assessment Check</h2>
+      <div class="assessment-box">
+        <h3>Scenario 1: Confident Wrong vs. Confident Right</h3>
+        <p>A model generates "The Eiffel Tower is in Paris" with log P ≈ −0.5 (very high confidence) but generates "The Eiffel Tower was built in 1887" with log P ≈ −1.2, when the historically correct year is 1889. What does this suggest about where and how the model stores different types of knowledge?</p>
+        <details style="margin-top:1rem;">
+          <summary style="font-family:var(--mono);font-size:0.8rem;cursor:pointer;color:var(--teal);">Show strong answer</summary>
+          <div style="padding:1rem 0 0.5rem;">
+            <p><strong>Strong answer:</strong> The high-confidence Paris completion (log P ≈ −0.5) suggests that the "Eiffel Tower → Paris" association is strongly encoded in the model's MLP memories, and the attention routing from "Eiffel Tower" to "Paris" has been reinforced by many training examples. This is an often-repeated, prominent fact in web text.</p>
+            <p style="margin-top:0.8rem;">The incorrect year (1887 vs 1889) with lower confidence (log P ≈ −1.2) suggests several possible failure modes:</p>
+            <ol style="padding-left:1.5rem;margin-top:0.5rem;">
+              <li style="margin-bottom:0.4rem;"><strong>Training frequency:</strong> The exact construction year may appear inconsistently in training data (some sources say "began construction in 1887" while others say "completed in 1889"). The model has learned a mixture of these, with the more common surface form winning. Competing log-probabilities: log P("1889") vs. log P("1887") may be closer than log P("Paris") vs. log P("Berlin").</li>
+              <li style="margin-bottom:0.4rem;"><strong>Interference from nearby dates:</strong> The model may have confounded 1887 (start of construction) with 1889 (completion / Exposition Universelle). These co-occur in many texts about the Eiffel Tower, creating ambiguity in the factual neuron encoding.</li>
+              <li style="margin-bottom:0.4rem;"><strong>Test with logit lens:</strong> Run the logit lens on the year prompt. Does " 1887" vs. " 1889" already diverge at early layers, or do they converge to " 1887" only in final layers? Early divergence suggests the wrong fact is deeply encoded; late divergence suggests the correct fact might be recoverable with better prompting.</li>
+            </ol>
+            <p style="margin-top:0.8rem;">Key takeaway: confidence (log-probability) reflects training frequency as much as factual accuracy. High confidence is not a reliable truthfulness signal.</p>
+          </div>
+        </details>
+      </div>
+      <div class="assessment-box">
+        <h3>Scenario 2: Entropy Spike at Step 50</h3>
+        <p>During inference, a model's output distribution at step t=50 suddenly has entropy H &gt; 12 bits (near-uniform over the 50,257-token vocabulary), even though all previous steps had H ≈ 4–8 bits. The sequence is coherent up to step 49. What might cause this, and how would you diagnose it?</p>
+        <details style="margin-top:1rem;">
+          <summary style="font-family:var(--mono);font-size:0.8rem;cursor:pointer;color:var(--teal);">Show strong answer</summary>
+          <div style="padding:1rem 0 0.5rem;">
+            <p><strong>Strong answer:</strong> A sudden entropy spike at a specific step after a period of coherent low-entropy generation is anomalous and warrants diagnostic investigation. Possible causes:</p>
+            <ol style="padding-left:1.5rem;margin-top:0.5rem;">
+              <li style="margin-bottom:0.4rem;"><strong>Out-of-distribution generated token:</strong> A token generated at step 48 or 49 may be outside the model's training distribution (e.g., a rare token or an unusual token combination), corrupting the residual stream state and leading to incoherent processing at step 50. Check: does removing the step 49 token and regenerating restore low entropy?</li>
+              <li style="margin-bottom:0.4rem;"><strong>KV cache truncation:</strong> If the context window is exceeded and the KV cache is truncated (oldest tokens removed), the model may lose access to the document context that was providing the discourse coherence signal. Check: what is the total sequence length at step 50? Is it near the model's context window limit (1024 for GPT-2)?</li>
+              <li style="margin-bottom:0.4rem;"><strong>Repetition penalty side effect:</strong> If a strong repetition penalty is applied, and by step 50 all common continuations have been penalized, the remaining token distribution may be artificially flattened. Check: generate without repetition penalty and compare entropy profiles.</li>
+              <li style="margin-bottom:0.4rem;"><strong>Discourse topic exhaustion:</strong> The model may have genuinely run out of topic — it has said everything it knows about the subject and is now uncertain about what to generate next. This is a semantically valid high-entropy state, not a computational failure.</li>
+            </ol>
+            <p style="margin-top:0.8rem;"><strong>Diagnosis steps:</strong> (1) Run logit lens at step 50 — is entropy high at all layers (suggesting deep uncertainty) or only at the final layer (suggesting late-layer confusion)? (2) Inspect attention patterns at step 50 — is attention degenerate (attention sink for all heads)? (3) Check if the issue is reproducible with temperature=0 (greedy) — if entropy is still high, it is not a sampling artifact.</p>
+          </div>
+        </details>
+      </div>
+      <div class="assessment-box">
+        <h3>Scenario 3: Beam Search vs. Sampling for Factual Tasks</h3>
+        <p>A researcher proposes using beam search (beam width = 10) instead of greedy decoding for factual question answering, arguing that beam search "looks ahead" and will find the globally highest-probability completion rather than the locally optimal greedy choice. Is this reasoning correct? Under what conditions would beam search actually help?</p>
+        <details style="margin-top:1rem;">
+          <summary style="font-family:var(--mono);font-size:0.8rem;cursor:pointer;color:var(--teal);">Show strong answer</summary>
+          <div style="padding:1rem 0 0.5rem;">
+            <p><strong>Strong answer:</strong> The reasoning contains a valid insight but the practical benefit depends on the specific task:</p>
+            <ol style="padding-left:1.5rem;margin-top:0.5rem;">
+              <li style="margin-bottom:0.4rem;"><strong>When beam search helps:</strong> Beam search benefits tasks where the locally optimal first token is not the globally optimal first token. This happens when the answer requires a specific phrasing that starts with a low-probability token. Example: "What year was the Eiffel Tower completed?" — if the answer is "It was completed in 1889," the word "It" may have lower local probability than "The" or "In", but the full sequence "It was completed in 1889" may have higher joint probability. Beam search can find this.</li>
+              <li style="margin-bottom:0.4rem;"><strong>When beam search does NOT help for factual QA:</strong> For short factual completions (1–3 tokens), the greedy choice is usually optimal or near-optimal. The factual token has high local probability precisely because the model has learned to associate the prompt pattern with that token. Beam search with width 10 adds compute but minimal accuracy gain for "The capital of France is ___" — greedy is already finding " Paris."</li>
+              <li style="margin-bottom:0.4rem;"><strong>Beam search failure mode:</strong> For open-ended generation, beam search tends to produce repetitive text (it finds the "highest joint probability" sequence, which is often a repeated high-probability phrase). Holtzman et al. 2020 demonstrated this experimentally — beam search outputs are often degenerate on long-form tasks.</li>
+              <li style="margin-bottom:0.4rem;"><strong>Practical recommendation:</strong> Use greedy for very short factual completions (&lt;5 tokens). Use beam search for structured outputs where global coherence matters (translation, structured extraction). Use top-p for longer free-form generation.</li>
+            </ol>
+          </div>
+        </details>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ REFERENCES -->
+    <section id="references" class="lesson-section">
+      <h2>References</h2>
+      <ul class="ref-list">
+        <li>Radford, A. et al. (2019). <em>Language Models are Unsupervised Multitask Learners.</em> OpenAI. Introduces GPT-2; documents autoregressive generation and perplexity benchmarks.</li>
+        <li>Holtzman, A. et al. (2020). <em>The Curious Case of Neural Text Degeneration.</em> ICLR. Introduces nucleus (top-p) sampling and demonstrates failure modes of greedy and beam search.</li>
+        <li>Petroni, F. et al. (2019). <em>Language Models as Knowledge Bases?</em> EMNLP. Introduces LAMA benchmark; measures factual knowledge via cloze-style log-probability probes.</li>
+        <li>Chen, C. et al. (2023). <em>Accelerating Large Language Model Decoding with Speculative Sampling.</em> arXiv. Introduces speculative decoding exploiting KV cache parallelism.</li>
+        <li>Li, X. et al. (2023). <em>Contrastive Decoding: Open-ended Text Generation as Optimization.</em> ACL. Contrastive decoding by subtracting weak model log-probs from strong model log-probs.</li>
+        <li>Wang, C. et al. (2023). <em>Neural Codec Language Models are Zero-Shot Text to Speech Synthesizers.</em> arXiv. Introduces VALL-E; autoregressive codec token generation for TTS.</li>
+        <li>Xiao, G. et al. (2023). <em>Efficient Streaming Language Models with Attention Sinks.</em> ICLR 2024. Documents KV cache structure and attention sink behavior relevant to generation.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ NEXT -->
+    <section id="next" class="lesson-section">
+      <h2>Next Step</h2>
+      <p>You have completed Track 2: Architecture. You now understand attention mechanics (routing), MLP mechanics (memory), and generation mechanics (inference). Track 3 moves deeper into the residual stream — examining hidden states, the logit lens in detail, and how information evolves layer by layer through the model.</p>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:2rem;">
+        <a href="mlp-mechanics.html" style="display:inline-flex;align-items:center;gap:0.5rem;background:var(--sand);color:var(--ink);font-family:var(--mono);font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.75rem 1.5rem;text-decoration:none;border-radius:2px;border:1px solid var(--rule);">← Previous: MLP Mechanics</a>
+        <a href="../track3/hidden-states.html" class="next-btn">Next Track: Hidden States →</a>
+      </div>
+    </section>
+  </main>
+</div>
+<footer>
+  <span>MI Atlas — Mechanistic Interpretability Course</span>
+  <span>Track 2: Architecture</span>
+  <span style="color:#4a4a48;">Lesson 3 of 3</span>
+</footer>
+<script>
+  // Sidebar scroll-spy
+  const sections = document.querySelectorAll('.lesson-section');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navLinks.forEach(link => {
+          link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
