@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lab 03: Patching Walkthrough — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="../index.html">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../track1/tokenization.html">Foundations</a></li>
+      <li><a href="../track2/attention-mechanics.html">Architecture</a></li>
+      <li><a href="../track3/hidden-states.html">Interpretability</a></li>
+      <li><a href="code-labs-hub.html">Code Labs</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">Lab 03</span>
+    <ul class="sidebar-nav">
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#setup">Setup</a></li>
+      <li><a href="#step1">Step 1: Clean & Corrupted Runs</a></li>
+      <li><a href="#step2">Step 2: Hook Infrastructure</a></li>
+      <li><a href="#step3">Step 3: Layer Patching</a></li>
+      <li><a href="#step4">Step 4: Causal Heatmap</a></li>
+      <li><a href="#step5">Step 5: Head Patching</a></li>
+      <li><a href="#step6">Step 6: MLP vs Attn</a></li>
+      <li><a href="#expected">Expected Outputs</a></li>
+      <li><a href="#stretch">Stretch Goals</a></li>
+    </ul>
+  </aside>
+
+  <main class="lesson-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a><span>›</span>
+      <a href="code-labs-hub.html">Code Labs</a><span>›</span>
+      Lab 03: Patching
+    </div>
+
+    <div class="lesson-section" id="overview">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Lab 03: Activation Patching Walkthrough</h2>
+      <div class="meta-box">
+        <div class="meta-item"><label>Track</label><span>Track 4: Code Labs</span></div>
+        <div class="meta-item"><label>Lab</label><span>03 of 05</span></div>
+        <div class="meta-item"><label>Time</label><span>~75 min</span></div>
+        <div class="meta-item"><label>Models</label><span>GPT-2 small</span></div>
+      </div>
+      <p>This lab implements activation patching from scratch using PyTorch forward hooks. You will reproduce a simplified causal tracing experiment inspired by Meng et al. 2022 (ROME) to identify which GPT-2 layers causally store the fact "The Eiffel Tower is in Paris."</p>
+      <div class="callout callout-rose">
+        <span class="callout-label">Core concept</span>
+        <p>Activation patching asks: if I replace the activation at layer L with the activation from a clean run, while keeping everything else from the corrupted run, how much does the correct answer's probability recover? Recovery = causal importance.</p>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="setup">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Setup</h2>
+      <pre class="code-block"><span class="kw">import</span> torch
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+<span class="kw">from</span> transformers <span class="kw">import</span> GPT2LMHeadModel, GPT2Tokenizer
+
+model = GPT2LMHeadModel.from_pretrained(<span class="st">"gpt2"</span>)
+tok   = GPT2Tokenizer.from_pretrained(<span class="st">"gpt2"</span>)
+model.eval()
+
+<span class="cm"># The fact we will trace</span>
+CLEAN_PROMPT     = <span class="st">"The Eiffel Tower is in"</span>
+CORRUPTED_PROMPT = <span class="st">"The Colosseum is in"</span>   <span class="cm"># different subject → Rome, not Paris</span>
+TARGET_TOKEN     = <span class="st">" Paris"</span>
+target_id = tok.encode(TARGET_TOKEN)[<span class="nu">0</span>]
+print(<span class="st">f"Target token id: {target_id} → '{TARGET_TOKEN}'"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step1">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 1: Clean and Corrupted Runs</h2>
+      <pre class="code-block"><span class="kw">def</span> get_logit_for_token(prompt, model, tok, token_id):
+    <span class="st">"""Return the logit for token_id at the last position."""</span>
+    ids = tok.encode(prompt, return_tensors=<span class="st">"pt"</span>)
+    <span class="kw">with</span> torch.no_grad():
+        out = model(ids)
+    logit = out.logits[<span class="nu">0</span>, -<span class="nu">1</span>, token_id].item()
+    prob  = torch.softmax(out.logits[<span class="nu">0</span>, -<span class="nu">1</span>], dim=-<span class="nu">1</span>)[token_id].item()
+    <span class="kw">return</span> logit, prob
+
+clean_logit,  clean_prob  = get_logit_for_token(CLEAN_PROMPT,     model, tok, target_id)
+corr_logit,   corr_prob   = get_logit_for_token(CORRUPTED_PROMPT, model, tok, target_id)
+
+print(<span class="st">f"Clean run    — logit: {clean_logit:.3f}, P(' Paris'): {clean_prob:.4f}"</span>)
+print(<span class="st">f"Corrupted run — logit: {corr_logit:.3f}, P(' Paris'): {corr_prob:.4f}"</span>)
+print(<span class="st">f"Gap (clean - corrupted): {clean_logit - corr_logit:.3f}"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step2">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 2: Hook Infrastructure</h2>
+      <pre class="code-block"><span class="cm"># Storage for clean activations</span>
+clean_cache = {}
+
+<span class="kw">def</span> make_save_hook(layer_idx, position):
+    <span class="st">"""Returns a hook that saves the residual stream at given layer/position."""</span>
+    <span class="kw">def</span> hook(module, input, output):
+        <span class="cm"># output is (hidden_states, present_kv, ...)</span>
+        hs = output[<span class="nu">0</span>] <span class="kw">if</span> isinstance(output, tuple) <span class="kw">else</span> output
+        clean_cache[layer_idx] = hs.detach().clone()  <span class="cm"># (1, T, 768)</span>
+    <span class="kw">return</span> hook
+
+<span class="kw">def</span> make_patch_hook(layer_idx, position, cache):
+    <span class="st">"""Returns a hook that patches position `position` from cache."""</span>
+    <span class="kw">def</span> hook(module, input, output):
+        hs = output[<span class="nu">0</span>] <span class="kw">if</span> isinstance(output, tuple) <span class="kw">else</span> output
+        hs = hs.clone()
+        hs[<span class="nu">0</span>, position, :] = cache[layer_idx][<span class="nu">0</span>, position, :]
+        <span class="kw">if</span> isinstance(output, tuple):
+            <span class="kw">return</span> (hs,) + output[<span class="nu">1</span>:]
+        <span class="kw">return</span> hs
+    <span class="kw">return</span> hook
+
+<span class="cm"># Step 2a: Save clean activations for all 12 layers</span>
+clean_ids = tok.encode(CLEAN_PROMPT, return_tensors=<span class="st">"pt"</span>)
+last_pos   = clean_ids.shape[<span class="nu">1</span>] - <span class="nu">1</span>
+
+hooks = []
+<span class="kw">for</span> l <span class="kw">in</span> range(<span class="nu">12</span>):
+    h = model.transformer.h[l].register_forward_hook(make_save_hook(l, last_pos))
+    hooks.append(h)
+
+<span class="kw">with</span> torch.no_grad():
+    model(clean_ids)
+
+<span class="kw">for</span> h <span class="kw">in</span> hooks:
+    h.remove()
+
+print(<span class="st">f"Saved clean activations for {len(clean_cache)} layers."</span>)
+print(<span class="st">f"Each activation shape: {clean_cache[0].shape}"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step3">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 3: Layer-by-Layer Patching</h2>
+      <pre class="code-block">corr_ids = tok.encode(CORRUPTED_PROMPT, return_tensors=<span class="st">"pt"</span>)
+<span class="cm"># Note: corrupted prompt may be shorter — we patch last position</span>
+corr_last = corr_ids.shape[<span class="nu">1</span>] - <span class="nu">1</span>
+
+patch_results = []
+
+<span class="kw">for</span> patch_layer <span class="kw">in</span> range(<span class="nu">12</span>):
+    <span class="cm"># Install patch hook only on patch_layer</span>
+    hook = model.transformer.h[patch_layer].register_forward_hook(
+        make_patch_hook(patch_layer, corr_last, clean_cache)
+    )
+
+    <span class="kw">with</span> torch.no_grad():
+        out = model(corr_ids)
+
+    hook.remove()
+
+    patched_logit = out.logits[<span class="nu">0</span>, -<span class="nu">1</span>, target_id].item()
+
+    <span class="cm"># Normalised recovery: 0 = no recovery, 1 = full recovery</span>
+    recovery = (patched_logit - corr_logit) / (clean_logit - corr_logit + <span class="nu">1e-9</span>)
+    patch_results.append(recovery)
+    print(<span class="st">f"  Patch layer {patch_layer:2d}: logit={patched_logit:.3f}, recovery={recovery:.3f}"</span>)
+
+print(<span class="st">"\nTop layers by causal effect:"</span>)
+<span class="kw">for</span> l, r <span class="kw">in</span> sorted(enumerate(patch_results), key=<span class="kw">lambda</span> x: -x[<span class="nu">1</span>])[:<span class="nu">3</span>]:
+    print(<span class="st">f"  Layer {l}: recovery={r:.3f}"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step4">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 4: Causal Effect Heatmap</h2>
+      <pre class="code-block">fig, ax = plt.subplots(figsize=(<span class="nu">10</span>, <span class="nu">3.5</span>))
+bars = ax.bar(range(<span class="nu">12</span>), patch_results, color=<span class="st">"#9c3a4a"</span>, alpha=<span class="nu">0.85</span>)
+ax.axhline(<span class="nu">0</span>, color=<span class="st">"#8a8680"</span>, linewidth=<span class="nu">0.8</span>)
+ax.axhline(<span class="nu">1</span>, color=<span class="st">"#2a7c7c"</span>, linewidth=<span class="nu">0.8</span>, linestyle=<span class="st">"--"</span>, label=<span class="st">"Full recovery"</span>)
+ax.set_xticks(range(<span class="nu">12</span>))
+ax.set_xticklabels([<span class="st">f"L{i}"</span> <span class="kw">for</span> i <span class="kw">in</span> range(<span class="nu">12</span>)])
+ax.set_xlabel(<span class="st">"Layer patched"</span>)
+ax.set_ylabel(<span class="st">"Normalised recovery"</span>)
+ax.set_title(<span class="st">"Causal Tracing: Which layer stores 'Eiffel Tower → Paris'?"</span>)
+ax.legend()
+plt.tight_layout()
+plt.savefig(<span class="st">"patching_heatmap.png"</span>, dpi=<span class="nu">150</span>)
+print(<span class="st">"Saved: patching_heatmap.png"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step5">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 5: Attention Head Patching</h2>
+      <pre class="code-block"><span class="cm"># Patch individual attention heads within the top causal layer</span>
+top_layer = int(np.argmax(patch_results))
+print(<span class="st">f"Top causal layer: {top_layer}"</span>)
+
+<span class="cm"># Save attention output for each head in top_layer</span>
+head_cache = {}
+
+<span class="kw">def</span> save_attn_hook(module, input, output):
+    <span class="cm"># output[0] is attention output (1, T, 768)</span>
+    head_cache[<span class="st">"attn_out"</span>] = output[<span class="nu">0</span>].detach().clone()
+
+hook = model.transformer.h[top_layer].attn.register_forward_hook(save_attn_hook)
+<span class="kw">with</span> torch.no_grad():
+    model(clean_ids)
+hook.remove()
+
+<span class="cm"># Patch each of the 12 heads individually</span>
+d_head = <span class="nu">768</span> // <span class="nu">12</span>  <span class="cm"># 64 dims per head</span>
+head_recoveries = []
+
+<span class="kw">for</span> head_idx <span class="kw">in</span> range(<span class="nu">12</span>):
+    start = head_idx * d_head
+    end   = start + d_head
+
+    <span class="kw">def</span> patch_head_hook(module, input, output, _h=head_idx):
+        out = output[<span class="nu">0</span>].clone()
+        out[<span class="nu">0</span>, corr_last, _h*d_head:(_h+<span class="nu">1</span>)*d_head] = \
+            head_cache[<span class="st">"attn_out"</span>][<span class="nu">0</span>, last_pos, _h*d_head:(_h+<span class="nu">1</span>)*d_head]
+        <span class="kw">return</span> (out,) + output[<span class="nu">1</span>:]
+
+    hook = model.transformer.h[top_layer].attn.register_forward_hook(patch_head_hook)
+    <span class="kw">with</span> torch.no_grad():
+        out = model(corr_ids)
+    hook.remove()
+
+    logit = out.logits[<span class="nu">0</span>, -<span class="nu">1</span>, target_id].item()
+    rec   = (logit - corr_logit) / (clean_logit - corr_logit + <span class="nu">1e-9</span>)
+    head_recoveries.append(rec)
+    print(<span class="st">f"  Layer {top_layer}, Head {head_idx:2d}: recovery={rec:.3f}"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step6">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 6: MLP vs Attention Contribution</h2>
+      <pre class="code-block"><span class="cm"># For the top causal layer, compare patching the full layer,</span>
+<span class="cm"># just the MLP, and just the attention</span>
+
+mlp_cache = {}
+attn_cache_full = {}
+
+<span class="kw">def</span> save_mlp_hook(module, input, output):
+    mlp_cache[<span class="st">"mlp"</span>] = output.detach().clone()
+
+<span class="kw">def</span> save_attn_full_hook(module, input, output):
+    attn_cache_full[<span class="st">"attn"</span>] = output[<span class="nu">0</span>].detach().clone()
+
+h1 = model.transformer.h[top_layer].mlp.register_forward_hook(save_mlp_hook)
+h2 = model.transformer.h[top_layer].attn.register_forward_hook(save_attn_full_hook)
+<span class="kw">with</span> torch.no_grad():
+    model(clean_ids)
+h1.remove(); h2.remove()
+
+<span class="cm"># Patch only MLP output</span>
+<span class="kw">def</span> patch_mlp_hook(module, input, output):
+    out = output.clone()
+    out[<span class="nu">0</span>, corr_last, :] = mlp_cache[<span class="st">"mlp"</span>][<span class="nu">0</span>, last_pos, :]
+    <span class="kw">return</span> out
+
+hook = model.transformer.h[top_layer].mlp.register_forward_hook(patch_mlp_hook)
+<span class="kw">with</span> torch.no_grad():
+    out_mlp = model(corr_ids)
+hook.remove()
+mlp_logit = out_mlp.logits[<span class="nu">0</span>, -<span class="nu">1</span>, target_id].item()
+mlp_rec   = (mlp_logit - corr_logit) / (clean_logit - corr_logit + <span class="nu">1e-9</span>)
+
+print(<span class="st">f"\nLayer {top_layer} breakdown:"</span>)
+print(<span class="st">f"  Full layer patch: recovery={patch_results[top_layer]:.3f}"</span>)
+print(<span class="st">f"  MLP only:        recovery={mlp_rec:.3f}"</span>)
+print(<span class="st">f"  Attn only:       recovery≈{patch_results[top_layer] - mlp_rec:.3f} (approx)"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="expected">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Expected Outputs</h2>
+      <table class="comparison-table">
+        <thead><tr><th>Experiment</th><th>Expected Finding</th></tr></thead>
+        <tbody>
+          <tr><td>Clean P(' Paris')</td><td>~0.35–0.50</td></tr>
+          <tr><td>Corrupted P(' Paris')</td><td>~0.01–0.05</td></tr>
+          <tr><td>Top causal layer</td><td>Layer 8–10 (late middle)</td></tr>
+          <tr><td>Top causal head</td><td>One or two heads dominate</td></tr>
+          <tr><td>MLP vs Attn split</td><td>MLP typically contributes 60–80% in top layer</td></tr>
+        </tbody>
+      </table>
+      <div class="callout callout-amber">
+        <span class="callout-label">Interpretation note</span>
+        <p>GPT-2 small is a small model — results will vary from large models (GPT-2 XL, GPT-4). The key takeaway is the <em>method</em>, not the exact layer numbers. In larger models, factual recall tends to localise to later MLP layers.</p>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="stretch">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Stretch Goals</h2>
+      <div class="exercise-box">
+        <h3>Extend the Patching Study</h3>
+        <ul class="step-list">
+          <li class="step-item"><span class="step-pill">S1</span><span class="step-text">Try 5 different factual prompts (e.g., "The Louvre is in", "The Great Wall is in", "Big Ben is in"). Do all facts localise to the same layers?</span></li>
+          <li class="step-item"><span class="step-pill">S2</span><span class="step-text">Implement token-position patching: instead of patching the last position, patch each token position independently. Which subject-token position is most causal?</span></li>
+          <li class="step-item"><span class="step-pill">S3</span><span class="step-text">Implement "mean ablation" as an alternative to clean patching: replace the activation with the mean activation over 20 random prompts. Compare mean-ablation vs clean-patch causal maps.</span></li>
+          <li class="step-item"><span class="step-pill">S4</span><span class="step-text">Reproduce the experiment with GPT-2-medium (345M). Do the causal layers shift deeper?</span></li>
+        </ul>
+      </div>
+      <a class="next-btn" href="speech-walkthrough.html">Next Lab: Speech →</a>
+    </div>
+  </main>
+</div>
+
+<footer><span>Mechanistic Interpretability Atlas</span> · MIT License · 2025</footer>
+<script>
+const sections = document.querySelectorAll('.lesson-section');
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.remove('active'));
+      const active = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
