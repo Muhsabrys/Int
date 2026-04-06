@@ -1,0 +1,1511 @@
+/* === DESIGN TOKENS === */
+:root {
+  --cream: #faf8f3; --ink: #0f0e0c; --sand: #f0ead8; --card: #f5f1e8;
+  --amber: #c8832a; --amber-light: #e8a84a; --amber-pale: #fdf3e3;
+  --teal: #2a7c7c; --teal-light: #3a9e9e; --teal-pale: #e8f5f5;
+  --rose: #9c3a4a; --rose-light: #c04a5e; --rose-pale: #fdf0f2;
+  --violet: #5a3a8c; --violet-light: #7a52b8; --violet-pale: #f0eaf8;
+  --green: #3a7c4a; --green-pale: #eaf5ec;
+  --rule: #d8d0bc;
+  --mono: 'DM Mono', monospace;
+  --display: 'Fraunces', serif;
+  --body: 'DM Sans', sans-serif;
+}
+/* === RESET === */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+/* === BASE === */
+html {
+  scroll-behavior: smooth;
+}
+body {
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--body);
+  font-weight: 300;
+  line-height: 1.7;
+}
+/* === NAVBAR === */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: var(--cream);
+  border-bottom: 1px solid var(--rule);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+}
+.nav-inner {
+  max-width: 1200px;
+  margin: auto;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+}
+.nav-logo {
+  font-family: var(--display);
+  font-size: 1.1rem;
+  color: var(--amber);
+  text-decoration: none;
+  font-weight: 600;
+}
+.nav-links {
+  display: flex;
+  gap: 1.5rem;
+  list-style: none;
+}
+.nav-links a {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-decoration: none;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+.nav-links a:hover {
+  opacity: 1;
+}
+/* === HERO === */
+#hero {
+  background: var(--ink);
+  color: var(--cream);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 8vw;
+  position: relative;
+  overflow: hidden;
+}
+#hero-canvas {
+  position: absolute;
+  inset: 0;
+  opacity: 0.18;
+}
+.hero-content {
+  position: relative;
+  z-index: 2;
+  max-width: 860px;
+}
+.hero-eyebrow {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  color: var(--amber-light);
+  text-transform: uppercase;
+  margin-bottom: 2rem;
+}
+.hero-content h1 {
+  font-family: var(--display);
+  font-size: clamp(2.8rem, 6vw, 5.2rem);
+  font-weight: 300;
+  line-height: 1.1;
+  margin-bottom: 1.8rem;
+}
+.hero-content h1 em {
+  font-style: italic;
+  color: var(--amber-light);
+}
+.hero-sub {
+  font-weight: 200;
+  font-size: 1.15rem;
+  color: #c8c4bc;
+  max-width: 580px;
+  line-height: 1.8;
+}
+.hero-cta {
+  display: inline-flex;
+  gap: 1rem;
+  margin-top: 2.5rem;
+  flex-wrap: wrap;
+}
+.btn-primary {
+  background: var(--amber);
+  color: white;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.9rem 2rem;
+  text-decoration: none;
+  border-radius: 2px;
+  transition: background 0.2s;
+}
+.btn-primary:hover {
+  background: var(--amber-light);
+}
+.btn-ghost {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.9rem 2rem;
+  text-decoration: none;
+  border-radius: 2px;
+  transition: all 0.2s;
+}
+.btn-ghost:hover {
+  border-color: white;
+  color: white;
+}
+.hero-meta {
+  display: flex;
+  gap: 3rem;
+  margin-top: 3rem;
+  flex-wrap: wrap;
+}
+.hero-stat-n {
+  font-family: var(--mono);
+  font-size: 2rem;
+  color: var(--amber-light);
+  display: block;
+}
+.hero-stat-l {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  color: #8a8680;
+  text-transform: uppercase;
+  display: block;
+}
+/* === WAVE TRANSITION === */
+.wave-transition {
+  display: block;
+  width: 100%;
+  background: var(--ink);
+  margin-bottom: -2px;
+}
+/* === MAIN WRAPPER === */
+main {
+  padding: 0 8vw 8rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+/* === SECTION HEADERS === */
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.2rem;
+  margin-bottom: 1rem;
+  padding-top: 5rem;
+}
+.section-num {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: #8a8680;
+  padding-top: 0.6rem;
+  flex-shrink: 0;
+  letter-spacing: 0.08em;
+}
+.section-dot-title {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.5rem;
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+h2 {
+  font-family: var(--display);
+  font-size: clamp(1.6rem, 3vw, 2.4rem);
+  font-weight: 400;
+  line-height: 1.15;
+}
+h2 em {
+  font-style: italic;
+}
+.section-rule {
+  height: 1px;
+  background: var(--rule);
+  margin-bottom: 2.5rem;
+}
+/* === TWO-COL GRID === */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  align-items: start;
+}
+.two-col.flip {
+  direction: rtl;
+}
+.two-col.flip > * {
+  direction: ltr;
+}
+/* === BODY TEXT === */
+.body-text {
+  font-family: var(--body);
+  font-weight: 300;
+  font-size: 1.02rem;
+  line-height: 1.8;
+  color: #2a2820;
+}
+.body-text p + p {
+  margin-top: 1rem;
+}
+.body-text strong {
+  font-weight: 400;
+  color: var(--ink);
+}
+.body-text em {
+  font-style: italic;
+  font-family: var(--display);
+}
+/* === CANVAS CARDS === */
+.canvas-card {
+  background: var(--card);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+.canvas-card canvas {
+  display: block;
+  width: 100%;
+}
+.canvas-label {
+  font-family: var(--mono);
+  font-size: 0.63rem;
+  letter-spacing: 0.14em;
+  color: #8a8680;
+  text-transform: uppercase;
+  padding: 0.8rem 1.2rem;
+  border-top: 1px solid var(--rule);
+}
+/* === CALLOUTS === */
+.callout {
+  border-radius: 2px;
+  padding: 1.4rem 1.6rem;
+  margin: 2rem 0;
+  position: relative;
+}
+.callout::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 2px 0 0 2px;
+}
+.callout-amber { background: var(--amber-pale); }
+.callout-amber::before { background: var(--amber); }
+.callout-teal { background: var(--teal-pale); }
+.callout-teal::before { background: var(--teal); }
+.callout-rose { background: var(--rose-pale); }
+.callout-rose::before { background: var(--rose); }
+.callout-violet { background: var(--violet-pale); }
+.callout-violet::before { background: var(--violet); }
+.callout-green { background: var(--green-pale); }
+.callout-green::before { background: var(--green); }
+.callout-label {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  display: block;
+}
+.callout-amber .callout-label { color: var(--amber); }
+.callout-teal .callout-label { color: var(--teal); }
+.callout-rose .callout-label { color: var(--rose); }
+.callout-violet .callout-label { color: var(--violet); }
+.callout-green .callout-label { color: var(--green); }
+.callout p {
+  font-family: var(--body);
+  font-weight: 300;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: #2a2820;
+}
+/* === STEP LIST === */
+.step-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.step-item {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.step-pill {
+  background: var(--ink);
+  color: var(--cream);
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  width: 26px;
+  height: 26px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+.step-text {
+  font-family: var(--body);
+  font-weight: 300;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: #2a2820;
+}
+/* === FEATURE TABLE === */
+.feature-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  margin-top: 1rem;
+}
+.feature-table th {
+  text-align: left;
+  padding: 0.5rem 0.8rem;
+  background: var(--ink);
+  color: var(--cream);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+}
+.feature-table td {
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--rule);
+  color: #3a3830;
+}
+.feature-table tr:nth-child(even) td {
+  background: var(--sand);
+}
+/* === COMPARE GRID === */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.compare-card {
+  border-radius: 4px;
+  padding: 1.4rem;
+}
+.compare-card h4 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 1.05rem;
+  margin-bottom: 0.8rem;
+}
+.compare-card ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.compare-card li {
+  font-family: var(--body);
+  font-weight: 300;
+  font-size: 0.87rem;
+  line-height: 1.5;
+  padding-left: 1rem;
+  position: relative;
+  color: #2a2820;
+}
+.compare-card li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+.native-card { background: var(--teal-pale); }
+.native-card h4 { color: var(--teal); }
+.nonnative-card { background: var(--rose-pale); }
+.nonnative-card h4 { color: var(--rose); }
+/* === SCROLL REVEAL === */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.75s ease, transform 0.75s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: none;
+}
+/* === SECTION DIVIDER === */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--rule), transparent);
+  margin: 4rem 0 0;
+}
+/* === MONO LABEL === */
+.mono-label {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8a8680;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+/* === ACCENT CLASSES === */
+.accent-amber { color: var(--amber); }
+.accent-teal { color: var(--teal); }
+.accent-rose { color: var(--rose); }
+.accent-violet { color: var(--violet); }
+.accent-green { color: var(--green); }
+/* === INLINE CODE === */
+code {
+  font-family: var(--mono);
+  font-size: 0.82em;
+  background: var(--sand);
+  padding: 0.1em 0.4em;
+  border-radius: 2px;
+  color: var(--rose);
+}
+/* === LESSON LAYOUT === */
+.lesson-wrapper {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 4rem;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 6rem 2rem 8rem;
+}
+.lesson-sidebar {
+  position: sticky;
+  top: 80px;
+  height: calc(100vh - 100px);
+  overflow-y: auto;
+}
+.sidebar-title {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #8a8680;
+  margin-bottom: 1rem;
+  display: block;
+}
+.sidebar-nav {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.sidebar-nav a {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: #6a6460;
+  text-decoration: none;
+  padding: 0.3rem 0.6rem;
+  border-radius: 2px;
+  transition: all 0.2s;
+  display: block;
+}
+.sidebar-nav a:hover,
+.sidebar-nav a.active {
+  color: var(--amber);
+  background: var(--amber-pale);
+}
+.lesson-content {
+  max-width: 760px;
+}
+/* === LESSON SECTIONS === */
+.lesson-section {
+  padding-top: 4rem;
+  margin-bottom: 2rem;
+}
+.lesson-section h2 {
+  font-family: var(--display);
+  font-size: 1.8rem;
+  font-weight: 400;
+  color: var(--ink);
+  margin-bottom: 0.5rem;
+}
+.section-accent {
+  display: inline-block;
+  width: 3px;
+  height: 1.4em;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 0.6rem;
+}
+.lesson-section p {
+  font-family: var(--body);
+  font-weight: 300;
+  font-size: 1rem;
+  line-height: 1.85;
+  color: #2a2820;
+  margin-bottom: 1rem;
+}
+.lesson-section ul,
+.lesson-section ol {
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+.lesson-section li {
+  font-family: var(--body);
+  font-weight: 300;
+  font-size: 0.97rem;
+  line-height: 1.75;
+  color: #2a2820;
+  margin-bottom: 0.4rem;
+}
+/* === ASCII DIAGRAM === */
+.ascii-diagram {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  background: #f0ede4;
+  border: 1px solid var(--rule);
+  padding: 1.5rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  line-height: 1.6;
+  color: #2a2820;
+  margin: 1.5rem 0;
+  white-space: pre;
+}
+/* === CODE BLOCK === */
+.code-block {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  background: #1a1a1a;
+  color: #e8e4dc;
+  padding: 1.5rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  line-height: 1.7;
+  margin: 1.5rem 0;
+  white-space: pre;
+}
+.code-block .kw { color: #e8a84a; }
+.code-block .cm { color: #6a6a6a; font-style: italic; }
+.code-block .st { color: #7ec8a0; }
+.code-block .nu { color: #c8832a; }
+.code-block .fn { color: #7ab8e8; }
+/* === EXERCISE BOX === */
+.exercise-box {
+  background: var(--violet-pale);
+  border-left: 4px solid var(--violet);
+  padding: 1.5rem 1.8rem;
+  border-radius: 0 4px 4px 0;
+  margin: 1.5rem 0;
+}
+.exercise-box h3 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 1.2rem;
+  color: var(--violet);
+  margin-bottom: 0.8rem;
+}
+/* === ASSESSMENT BOX === */
+.assessment-box {
+  background: var(--teal-pale);
+  border-left: 4px solid var(--teal);
+  padding: 1.5rem 1.8rem;
+  border-radius: 0 4px 4px 0;
+  margin: 1.5rem 0;
+}
+.assessment-box h3 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 1.2rem;
+  color: var(--teal);
+  margin-bottom: 0.8rem;
+}
+/* === NEXT STEP BUTTON === */
+.next-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--amber);
+  color: white;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.9rem 2rem;
+  text-decoration: none;
+  border-radius: 2px;
+  margin-top: 3rem;
+  transition: background 0.2s;
+}
+.next-btn:hover {
+  background: var(--amber-light);
+}
+/* === METADATA BOX === */
+.meta-box {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+  background: var(--sand);
+  padding: 1.5rem;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+}
+.meta-item label {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #8a8680;
+  display: block;
+  margin-bottom: 0.3rem;
+}
+.meta-item span {
+  font-family: var(--body);
+  font-weight: 400;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+/* === BREADCRUMB === */
+.breadcrumb {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: #8a8680;
+  margin-bottom: 2rem;
+  padding-top: 1rem;
+}
+.breadcrumb a {
+  color: #8a8680;
+  text-decoration: none;
+}
+.breadcrumb a:hover {
+  color: var(--amber);
+}
+.breadcrumb span {
+  margin: 0 0.4rem;
+}
+/* === OUTCOMES LIST === */
+.outcomes-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 1rem 0;
+}
+.outcomes-list li {
+  display: flex;
+  gap: 0.8rem;
+  align-items: flex-start;
+  font-family: var(--body);
+  font-weight: 300;
+  font-size: 0.97rem;
+  line-height: 1.7;
+  color: #2a2820;
+}
+.outcomes-list li::before {
+  content: '→';
+  font-family: var(--mono);
+  color: var(--amber);
+  flex-shrink: 0;
+}
+/* === REFERENCES LIST === */
+.ref-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+.ref-list li {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: #5a5650;
+  border-left: 2px solid var(--rule);
+  padding-left: 0.8rem;
+}
+/* === COMPARISON TABLE === */
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 0.9rem;
+}
+.comparison-table th {
+  background: var(--ink);
+  color: var(--cream);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  padding: 0.7rem 1rem;
+  text-align: left;
+}
+.comparison-table td {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--body);
+  font-weight: 300;
+  color: #2a2820;
+}
+.comparison-table tr:nth-child(even) td {
+  background: var(--sand);
+}
+.comparison-table tr:hover td {
+  background: var(--amber-pale);
+}
+/* === ANIMATIONS === */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: none; }
+}
+/* === FOOTER === */
+footer {
+  background: var(--ink);
+  color: #6a6660;
+  padding: 3rem 8vw;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+footer span {
+  color: var(--amber-light);
+}
+/* === RESPONSIVE === */
+@media (max-width: 860px) {
+  .two-col {
+    grid-template-columns: 1fr;
+  }
+  .two-col.flip {
+    direction: ltr;
+  }
+  .lesson-wrapper {
+    grid-template-columns: 1fr;
+  }
+  .lesson-sidebar {
+    display: none;
+  }
+  .compare-grid {
+    grid-template-columns: 1fr;
+  }
+  main {
+    padding: 0 5vw 6rem;
+  }
+}
+@media (max-width: 600px) {
+  h1 {
+    font-size: 2.2rem;
+  }
+  .hero-meta {
+    gap: 1.5rem;
+  }
+}
+/* === PRINT === */
+@media print {
+  nav {
+    display: none;
+  }
+  .lesson-sidebar {
+    display: none;
+  }
+  body {
+    background: white;
+  }
+}
+Collapse 936 lines
+
+index.html
+Original file line number	Diff line number	Diff line change
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mechanistic Interpretability Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,200..900;1,9..144,200..900&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,100..900;1,9..40,100..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    /* === INDEX-SPECIFIC STYLES === */
+    /* Feature cards grid */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+    .feature-card {
+      background: var(--card);
+      padding: 1.8rem;
+      border-radius: 4px;
+    }
+    .feature-icon {
+      font-size: 1.8rem;
+      margin-bottom: 0.8rem;
+      display: block;
+    }
+    .feature-title {
+      font-family: var(--display);
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+      font-weight: 400;
+      color: var(--ink);
+    }
+    .feature-text {
+      font-family: var(--body);
+      font-weight: 300;
+      font-size: 0.92rem;
+      line-height: 1.7;
+      color: #4a4840;
+    }
+    /* Track cards grid */
+    .track-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 2rem;
+      margin-top: 1rem;
+    }
+    .track-card {
+      border-radius: 4px;
+      background: var(--card);
+      padding: 1.8rem;
+    }
+    .track-card-title {
+      font-family: var(--display);
+      font-size: 1.2rem;
+      font-weight: 400;
+      margin-bottom: 0.3rem;
+    }
+    .track-card-sub {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #8a8680;
+      margin-bottom: 1.2rem;
+      display: block;
+    }
+    .lesson-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .lesson-link {
+      font-family: var(--body);
+      font-size: 0.9rem;
+      color: var(--ink);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0;
+      border-bottom: 1px solid transparent;
+      transition: border-bottom-color 0.2s, color 0.2s;
+    }
+    .lesson-link .lesson-arrow {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      opacity: 0.4;
+      transition: opacity 0.2s;
+    }
+    .lesson-link:hover .lesson-arrow {
+      opacity: 1;
+    }
+    /* Per-track hover colours */
+    .track-amber .lesson-link:hover { color: var(--amber); border-bottom-color: var(--rule); }
+    .track-teal .lesson-link:hover  { color: var(--teal);  border-bottom-color: var(--rule); }
+    .track-rose .lesson-link:hover  { color: var(--rose);  border-bottom-color: var(--rule); }
+    .track-violet .lesson-link:hover { color: var(--violet); border-bottom-color: var(--rule); }
+    /* Prereq cards */
+    .prereq-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+    .prereq-card {
+      background: var(--card);
+      padding: 1.6rem;
+      border-radius: 4px;
+      border-top: 3px solid var(--rule);
+    }
+    .prereq-icon {
+      font-size: 1.6rem;
+      margin-bottom: 0.7rem;
+      display: block;
+    }
+    .prereq-title {
+      font-family: var(--display);
+      font-size: 1rem;
+      font-weight: 400;
+      margin-bottom: 0.4rem;
+      color: var(--ink);
+    }
+    .prereq-text {
+      font-family: var(--body);
+      font-weight: 300;
+      font-size: 0.88rem;
+      line-height: 1.65;
+      color: #4a4840;
+    }
+    /* Lesson format list */
+    .format-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .format-item {
+      background: var(--card);
+      padding: 1.2rem 1.4rem;
+      border-radius: 4px;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.8rem;
+    }
+    .format-num {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--amber);
+      flex-shrink: 0;
+      padding-top: 0.15rem;
+    }
+    .format-label {
+      font-family: var(--body);
+      font-size: 0.88rem;
+      font-weight: 300;
+      color: #2a2820;
+      line-height: 1.5;
+    }
+    @media (max-width: 860px) {
+      .track-grid,
+      .feature-grid,
+      .prereq-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- ===== NAVBAR ===== -->
+  <nav>
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">MI Atlas</a>
+      <ul class="nav-links">
+        <li><a href="track1/tokenization.html">Foundations</a></li>
+        <li><a href="track2/attention-mechanics.html">Architecture</a></li>
+        <li><a href="track3/hidden-states.html">Interpretability</a></li>
+        <li><a href="track4/code-labs-hub.html">Code Labs</a></li>
+      </ul>
+    </div>
+  </nav>
+  <!-- ===== HERO ===== -->
+  <section id="hero">
+    <canvas id="hero-canvas"></canvas>
+    <div class="hero-content">
+      <p class="hero-eyebrow">A Complete Course in</p>
+      <h1>Mechanistic <em>Interpretability</em><br>Atlas</h1>
+      <p class="hero-sub">From tokenization to circuits, from probing to causal interventions — a complete, production-quality course in understanding how neural networks compute. Covers text, vision, and speech models.</p>
+      <div class="hero-cta">
+        <a href="track1/tokenization.html" class="btn-primary">Start with Foundations →</a>
+        <a href="#curriculum" class="btn-ghost">View All Lessons</a>
+      </div>
+      <div class="hero-meta">
+        <div>
+          <span class="hero-stat-n">4</span>
+          <span class="hero-stat-l">Tracks</span>
+        </div>
+        <div>
+          <span class="hero-stat-n">20</span>
+          <span class="hero-stat-l">Lessons</span>
+        </div>
+        <div>
+          <span class="hero-stat-n">3</span>
+          <span class="hero-stat-l">Modalities</span>
+        </div>
+        <div>
+          <span class="hero-stat-n">6</span>
+          <span class="hero-stat-l">Code Labs</span>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- Wave transition -->
+  <svg class="wave-transition" viewBox="0 0 1440 64" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,32 C240,64 480,0 720,32 C960,64 1200,0 1440,32 L1440,64 L0,64 Z" fill="#faf8f3"/>
+  </svg>
+  <!-- ===== MAIN ===== -->
+  <main>
+    <!-- SECTION A: What You Will Learn -->
+    <div class="section-header reveal">
+      <span class="section-num">01 —</span>
+      <div>
+        <div class="section-dot-title">
+          <span class="dot" style="background:var(--amber);"></span>
+          <h2>What You Will <em>Learn</em></h2>
+        </div>
+      </div>
+    </div>
+    <div class="section-rule"></div>
+    <div class="feature-grid reveal">
+      <div class="feature-card">
+        <span class="feature-icon">🔍</span>
+        <div class="feature-title">Mechanistic Understanding</div>
+        <p class="feature-text">Learn to trace information through transformer layers, identify circuits, and understand which components causally drive model outputs.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">🧠</span>
+        <div class="feature-title">Multimodal Coverage</div>
+        <p class="feature-text">Every concept illustrated with text, vision (ViT), and speech (Whisper, wav2vec2) examples. No modality left behind.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">🔬</span>
+        <div class="feature-title">Hands-on Labs</div>
+        <p class="feature-text">Six complete code labs with step-by-step instructions, expected outputs, and stretch goals. Reproducible with open-source models.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">📐</span>
+        <div class="feature-title">Causal Methods</div>
+        <p class="feature-text">Go beyond correlation. Learn activation patching, path patching, and circuit-level causal tests that confirm rather than suggest.</p>
+      </div>
+    </div>
+    <div class="section-divider"></div>
+    <!-- SECTION B: Curriculum -->
+    <div id="curriculum" class="section-header reveal">
+      <span class="section-num">02 —</span>
+      <div>
+        <div class="section-dot-title">
+          <span class="dot" style="background:var(--teal);"></span>
+          <h2><em>Curriculum</em></h2>
+        </div>
+      </div>
+    </div>
+    <div class="section-rule"></div>
+    <div class="track-grid reveal">
+      <!-- Track 1: Foundations -->
+      <div class="track-card track-amber" style="border-top: 4px solid var(--amber);">
+        <div class="track-card-title accent-amber">Track 1: Foundations</div>
+        <span class="track-card-sub">Where it all begins</span>
+        <ul class="lesson-list">
+          <li>
+            <a href="track1/tokenization.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Tokenization
+            </a>
+          </li>
+          <li>
+            <a href="track1/embeddings.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Embeddings
+            </a>
+          </li>
+          <li>
+            <a href="track1/transformer-layers.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Transformer Layers
+            </a>
+          </li>
+          <li>
+            <a href="track1/prediction.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Prediction
+            </a>
+          </li>
+        </ul>
+      </div>
+      <!-- Track 2: Architecture -->
+      <div class="track-card track-teal" style="border-top: 4px solid var(--teal);">
+        <div class="track-card-title accent-teal">Track 2: Architecture</div>
+        <span class="track-card-sub">Inside the transformer</span>
+        <ul class="lesson-list">
+          <li>
+            <a href="track2/attention-mechanics.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Attention Mechanics
+            </a>
+          </li>
+          <li>
+            <a href="track2/mlp-mechanics.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              MLP Mechanics
+            </a>
+          </li>
+          <li>
+            <a href="track2/generation-mechanics.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Generation Mechanics
+            </a>
+          </li>
+        </ul>
+      </div>
+      <!-- Track 3: Interpretability -->
+      <div class="track-card track-rose" style="border-top: 4px solid var(--rose);">
+        <div class="track-card-title accent-rose">Track 3: Interpretability</div>
+        <span class="track-card-sub">Understanding what models do</span>
+        <ul class="lesson-list">
+          <li>
+            <a href="track3/hidden-states.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Hidden States
+            </a>
+          </li>
+          <li>
+            <a href="track3/layer-probing.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Layer Probing
+            </a>
+          </li>
+          <li>
+            <a href="track3/activation-patching.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Activation Patching
+            </a>
+          </li>
+          <li>
+            <a href="track3/circuits.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Circuits
+            </a>
+          </li>
+          <li>
+            <a href="track3/superposition.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Superposition
+            </a>
+          </li>
+          <li>
+            <a href="track3/feature-visualization.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Feature Visualization
+            </a>
+          </li>
+          <li>
+            <a href="track3/toy-models.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Toy Models
+            </a>
+          </li>
+          <li>
+            <a href="track3/speech-mechint-slides.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Speech MechInt Slides
+            </a>
+          </li>
+        </ul>
+      </div>
+      <!-- Track 4: Code Labs -->
+      <div class="track-card track-violet" style="border-top: 4px solid var(--violet);">
+        <div class="track-card-title accent-violet">Track 4: Code Labs</div>
+        <span class="track-card-sub">Hands-on implementation</span>
+        <ul class="lesson-list">
+          <li>
+            <a href="track4/code-labs-hub.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Code Labs Hub
+            </a>
+          </li>
+          <li>
+            <a href="track4/tokenization-walkthrough.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Tokenization Walkthrough
+            </a>
+          </li>
+          <li>
+            <a href="track4/probing-walkthrough.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Probing Walkthrough
+            </a>
+          </li>
+          <li>
+            <a href="track4/patching-walkthrough.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Patching Walkthrough
+            </a>
+          </li>
+          <li>
+            <a href="track4/speech-walkthrough.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Speech Walkthrough
+            </a>
+          </li>
+          <li>
+            <a href="track4/sae-walkthrough.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              SAE Walkthrough
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+    <div class="section-divider"></div>
+    <!-- SECTION C: Lesson Format -->
+    <div class="section-header reveal">
+      <span class="section-num">03 —</span>
+      <div>
+        <div class="section-dot-title">
+          <span class="dot" style="background:var(--violet);"></span>
+          <h2>Lesson <em>Format</em></h2>
+        </div>
+      </div>
+    </div>
+    <div class="section-rule"></div>
+    <p class="body-text reveal" style="margin-bottom:1.5rem;">Every lesson in the Atlas follows a consistent 12-section structure. This predictable rhythm lets you focus on the material rather than navigating unfamiliar layouts. Each section builds on the last — from motivation through to practice and further reading.</p>
+    <div class="format-grid reveal">
+      <div class="format-item">
+        <span class="format-num">01</span>
+        <span class="format-label">Metadata &amp; Prerequisites</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">02</span>
+        <span class="format-label">Learning Outcomes</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">03</span>
+        <span class="format-label">Motivation &amp; Context</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">04</span>
+        <span class="format-label">Core Concept</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">05</span>
+        <span class="format-label">Detailed Mechanics</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">06</span>
+        <span class="format-label">Visual Diagram</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">07</span>
+        <span class="format-label">Code Walkthrough</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">08</span>
+        <span class="format-label">Multimodal Extensions</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">09</span>
+        <span class="format-label">Common Misconceptions</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">10</span>
+        <span class="format-label">Exercises</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">11</span>
+        <span class="format-label">Self-Assessment</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">12</span>
+        <span class="format-label">References &amp; Next Steps</span>
+      </div>
+    </div>
+    <div class="section-divider"></div>
+    <!-- SECTION D: Prerequisites -->
+    <div class="section-header reveal">
+      <span class="section-num">04 —</span>
+      <div>
+        <div class="section-dot-title">
+          <span class="dot" style="background:var(--green);"></span>
+          <h2><em>Prerequisites</em></h2>
+        </div>
+      </div>
+    </div>
+    <div class="section-rule"></div>
+    <div class="prereq-grid reveal">
+      <div class="prereq-card">
+        <span class="prereq-icon">🐍</span>
+        <div class="prereq-title">Python &amp; PyTorch Basics</div>
+        <p class="prereq-text">Comfortable writing Python functions and familiar with tensor operations in PyTorch or NumPy. You don't need to have trained models from scratch.</p>
+      </div>
+      <div class="prereq-card">
+        <span class="prereq-icon">📐</span>
+        <div class="prereq-title">Basic Linear Algebra</div>
+        <p class="prereq-text">Understanding of vectors, matrices, dot products, and matrix multiplication. Familiarity with concepts like eigenvectors is helpful but not required.</p>
+      </div>
+      <div class="prereq-card">
+        <span class="prereq-icon">🔭</span>
+        <div class="prereq-title">Curiosity About Models</div>
+        <p class="prereq-text">The most important prerequisite. A genuine desire to understand what happens inside neural networks — not just how to use them, but how they actually compute.</p>
+      </div>
+    </div>
+  </main>
+  <!-- ===== FOOTER ===== -->
+  <footer>
+    <div>Mechanistic Interpretability Atlas · <span>MIT License</span> · 2025</div>
+    <div>Built for learners who want to understand, not just apply.</div>
+  </footer>
+  <!-- ===== JAVASCRIPT ===== -->
+  <script>
+    /* ── Hero canvas: floating particles + oscilloscope lines ── */
+    (function () {
+      const canvas = document.getElementById('hero-canvas');
+      const ctx = canvas.getContext('2d');
+      let W, H, particles, osc;
+      function resize() {
+        W = canvas.width  = canvas.offsetWidth;
+        H = canvas.height = canvas.offsetHeight;
+      }
+      /* Particle definition */
+      function Particle() {
+        this.reset();
+      }
+      Particle.prototype.reset = function () {
+        this.x  = Math.random() * W;
+        this.y  = Math.random() * H;
+        this.r  = Math.random() * 1.8 + 0.4;
+        this.vx = (Math.random() - 0.5) * 0.35;
+        this.vy = (Math.random() - 0.5) * 0.35;
+        this.alpha = Math.random() * 0.6 + 0.2;
+        this.hue = Math.random() < 0.6 ? 34 : 180; /* amber or teal */
+      };
+      Particle.prototype.update = function () {
+        this.x += this.vx;
+        this.y += this.vy;
+        if (this.x < -10 || this.x > W + 10 || this.y < -10 || this.y > H + 10) {
+          this.reset();
+          this.x = Math.random() * W;
+          this.y = Math.random() * H;
+        }
+      };
+      Particle.prototype.draw = function () {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        ctx.fillStyle = 'hsl(' + this.hue + ',70%,70%)';
+        ctx.globalAlpha = this.alpha;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      };
+      /* Oscilloscope line definition */
+      function OscLine(yFrac, freq, amp, speed, hue, alpha) {
+        this.yFrac  = yFrac;
+        this.freq   = freq;
+        this.amp    = amp;
+        this.speed  = speed;
+        this.hue    = hue;
+        this.alpha  = alpha;
+        this.offset = Math.random() * Math.PI * 2;
+        this.t      = 0;
+      }
+      OscLine.prototype.draw = function () {
+        const baseY = H * this.yFrac;
+        ctx.beginPath();
+        ctx.globalAlpha = this.alpha;
+        ctx.strokeStyle = 'hsl(' + this.hue + ',60%,65%)';
+        ctx.lineWidth   = 1;
+        for (let x = 0; x <= W; x += 2) {
+          const y = baseY + Math.sin((x / W) * this.freq * Math.PI * 2 + this.t + this.offset) * this.amp;
+          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        this.t += this.speed;
+      };
+      function init() {
+        resize();
+        particles = [];
+        for (let i = 0; i < 120; i++) {
+          particles.push(new Particle());
+        }
+        osc = [
+          new OscLine(0.30, 3, 18, 0.008, 34,  0.35),
+          new OscLine(0.45, 5, 12, 0.012, 180, 0.28),
+          new OscLine(0.60, 4, 22, 0.006, 34,  0.22),
+          new OscLine(0.72, 6, 10, 0.015, 180, 0.18),
+          new OscLine(0.20, 2, 30, 0.005, 34,  0.15),
+        ];
+      }
+      function drawConnections() {
+        const maxDist = 90;
+        for (let i = 0; i < particles.length; i++) {
+          for (let j = i + 1; j < particles.length; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < maxDist) {
+              ctx.beginPath();
+              ctx.strokeStyle = 'rgba(200,180,140,' + (1 - dist / maxDist) * 0.12 + ')';
+              ctx.lineWidth = 0.5;
+              ctx.moveTo(particles[i].x, particles[i].y);
+              ctx.lineTo(particles[j].x, particles[j].y);
+              ctx.stroke();
+            }
+          }
+        }
+      }
+      function frame() {
+        ctx.clearRect(0, 0, W, H);
+        osc.forEach(function (o) { o.draw(); });
+        drawConnections();
+        particles.forEach(function (p) {
+          p.update();
+          p.draw();
+        });
+        requestAnimationFrame(frame);
+      }
+      window.addEventListener('resize', function () {
+        resize();
+        init();
+      });
+      init();
+      frame();
+    }());
+    /* ── Scroll reveal ── */
+    (function () {
+      const els = document.querySelectorAll('.reveal');
+      const io  = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) {
+            e.target.classList.add('visible');
+            io.unobserve(e.target);
+          }
+        });
+      }, { threshold: 0.1 });
+      els.forEach(function (el) { io.observe(el); });
+    }());
+    /* ── Active nav link detection ── */
+    (function () {
+      const links = document.querySelectorAll('.nav-links a');
+      const path  = window.location.pathname;
+      links.forEach(function (a) {
+        if (a.getAttribute('href') && path.includes(a.getAttribute('href').split('/')[0])) {
+          a.style.opacity = '1';
+          a.style.fontWeight = '500';
+        }
+      });
+      /* Highlight on scroll for in-page hash sections */
+      const sections = document.querySelectorAll('main [id]');
+      if (sections.length) {
+        const sio = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            if (e.isIntersecting) {
+              links.forEach(function (a) {
+                if (a.getAttribute('href') === '#' + e.target.id) {
+                  a.style.opacity = '1';
+                } else {
+                  a.style.opacity = '0.7';
+                }
+              });
+            }
+          });
+        }, { rootMargin: '-40% 0px -55% 0px' });
+        sections.forEach(function (s) { sio.observe(s); });
+      }
+    }());
+  </script>
+</body>
+</html>
