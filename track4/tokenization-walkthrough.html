@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lab 01: Tokenization Walkthrough — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="../index.html">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../track1/tokenization.html">Foundations</a></li>
+      <li><a href="../track2/attention-mechanics.html">Architecture</a></li>
+      <li><a href="../track3/hidden-states.html">Interpretability</a></li>
+      <li><a href="code-labs-hub.html">Code Labs</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">Lab 01</span>
+    <ul class="sidebar-nav">
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#setup">Setup</a></li>
+      <li><a href="#step1">Step 1: BPE Anatomy</a></li>
+      <li><a href="#step2">Step 2: Compare Tokenizers</a></li>
+      <li><a href="#step3">Step 3: Fragmentation</a></li>
+      <li><a href="#step4">Step 4: Special Tokens</a></li>
+      <li><a href="#step5">Step 5: Patch Tokens (ViT)</a></li>
+      <li><a href="#step6">Step 6: Acoustic Frames</a></li>
+      <li><a href="#expected">Expected Outputs</a></li>
+      <li><a href="#stretch">Stretch Goals</a></li>
+    </ul>
+  </aside>
+
+  <main class="lesson-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a><span>›</span>
+      <a href="code-labs-hub.html">Code Labs</a><span>›</span>
+      Lab 01: Tokenization
+    </div>
+
+    <div class="lesson-section" id="overview">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Lab 01: Tokenization Walkthrough</h2>
+      <div class="meta-box">
+        <div class="meta-item"><label>Track</label><span>Track 4: Code Labs</span></div>
+        <div class="meta-item"><label>Lab</label><span>01 of 05</span></div>
+        <div class="meta-item"><label>Time</label><span>~45 min</span></div>
+        <div class="meta-item"><label>Models</label><span>GPT-2, BERT, ViT, wav2vec2</span></div>
+      </div>
+      <p>In this lab you will: compare BPE and WordPiece tokenizers side by side, observe tokenization fragmentation on numbers and rare words, inspect special tokens, visualise ViT patch tokenization, and extract acoustic frames from wav2vec2's CNN front-end.</p>
+      <div class="callout callout-violet">
+        <span class="callout-label">Before you start</span>
+        <p>Run <code>pip install transformers torch Pillow librosa</code> and verify you can import them. All downloads happen automatically on first run (GPT-2 ~500MB, BERT ~400MB).</p>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="setup">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Setup</h2>
+      <pre class="code-block"><span class="cm"># lab01_setup.py — run this first to download all models</span>
+<span class="kw">from</span> transformers <span class="kw">import</span> (
+    GPT2Tokenizer, BertTokenizer,
+    ViTFeatureExtractor, Wav2Vec2Processor
+)
+
+print(<span class="st">"Downloading GPT-2 tokenizer..."</span>)
+gpt2_tok = GPT2Tokenizer.from_pretrained(<span class="st">"gpt2"</span>)
+
+print(<span class="st">"Downloading BERT tokenizer..."</span>)
+bert_tok = BertTokenizer.from_pretrained(<span class="st">"bert-base-uncased"</span>)
+
+print(<span class="st">"Downloading ViT feature extractor..."</span>)
+vit_fe = ViTFeatureExtractor.from_pretrained(<span class="st">"google/vit-base-patch16-224"</span>)
+
+print(<span class="st">"Downloading wav2vec2 processor..."</span>)
+w2v_proc = Wav2Vec2Processor.from_pretrained(<span class="st">"facebook/wav2vec2-base-960h"</span>)
+
+print(<span class="st">"✓ All ready."</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step1">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 1: BPE Anatomy</h2>
+      <p>Inspect GPT-2's BPE vocabulary. Find the longest token, the most frequent merge rule, and the token coverage of a sample sentence.</p>
+      <pre class="code-block"><span class="kw">from</span> transformers <span class="kw">import</span> GPT2Tokenizer
+<span class="kw">import</span> json
+
+tok = GPT2Tokenizer.from_pretrained(<span class="st">"gpt2"</span>)
+
+<span class="cm"># 1a. Vocabulary size</span>
+print(<span class="st">f"Vocabulary size: {tok.vocab_size}"</span>)  <span class="cm"># 50257</span>
+
+<span class="cm"># 1b. Longest token</span>
+vocab = tok.get_vocab()
+longest = max(vocab.keys(), key=<span class="kw">lambda</span> t: len(tok.convert_tokens_to_string([t])))
+print(<span class="st">f"Longest token: '{longest}' ({len(longest)} chars)"</span>)
+
+<span class="cm"># 1c. Tokenise a test sentence</span>
+sentences = [
+    <span class="st">"The cat sat on the mat."</span>,
+    <span class="st">"mechanistic interpretability"</span>,
+    <span class="st">"uncharacteristically"</span>,
+    <span class="st">"1234567890"</span>,
+    <span class="st">"supercalifragilisticexpialidocious"</span>,
+]
+<span class="kw">for</span> s <span class="kw">in</span> sentences:
+    tokens = tok.tokenize(s)
+    print(<span class="st">f"  {s!r:45s} → {tokens}"</span>)
+
+<span class="cm"># 1d. Token coverage: fraction of words that are single tokens</span>
+words = <span class="st">"The quick brown fox jumps over the lazy dog"</span>.split()
+single_token = sum(<span class="nu">1</span> <span class="kw">for</span> w <span class="kw">in</span> words <span class="kw">if</span> len(tok.tokenize(<span class="st">" "</span> + w)) == <span class="nu">1</span>)
+print(<span class="st">f"Single-token coverage: {single_token}/{len(words)} words"</span>)</pre>
+
+      <div class="callout callout-amber">
+        <span class="callout-label">Observe</span>
+        <p>Notice the leading space token (Ġ) in GPT-2. "cat" and " cat" are different tokens. BERT uses "##" prefixes instead. This affects how sentences are split.</p>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="step2">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 2: Compare Tokenizers</h2>
+      <p>Compare GPT-2 BPE vs BERT WordPiece on the same inputs.</p>
+      <pre class="code-block"><span class="kw">from</span> transformers <span class="kw">import</span> GPT2Tokenizer, BertTokenizer
+
+gpt2 = GPT2Tokenizer.from_pretrained(<span class="st">"gpt2"</span>)
+bert = BertTokenizer.from_pretrained(<span class="st">"bert-base-uncased"</span>)
+
+test_words = [
+    <span class="st">"interpretability"</span>,
+    <span class="st">"transformer"</span>,
+    <span class="st">"2024"</span>,
+    <span class="st">"COVID-19"</span>,
+    <span class="st">"don't"</span>,
+    <span class="st">"Zürich"</span>,
+    <span class="st">"抱怨"</span>,   <span class="cm"># Chinese characters</span>
+]
+
+print(<span class="st">f"{'Word':30s} {'GPT-2':35s} {'BERT':35s}"</span>)
+print(<span class="st">"-"</span> * <span class="nu">100</span>)
+<span class="kw">for</span> w <span class="kw">in</span> test_words:
+    g = gpt2.tokenize(<span class="st">" "</span> + w)
+    b = bert.tokenize(w)
+    print(<span class="st">f"  {w:28s} {str(g):35s} {str(b):35s}"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step3">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 3: Fragmentation Analysis</h2>
+      <p>Measure how numbers and technical terms fragment into multiple tokens. This directly impacts model performance on arithmetic and domain-specific tasks.</p>
+      <pre class="code-block"><span class="kw">import</span> random
+tok = GPT2Tokenizer.from_pretrained(<span class="st">"gpt2"</span>)
+
+<span class="cm"># Number fragmentation</span>
+print(<span class="st">"=== Number fragmentation ==="</span>)
+<span class="kw">for</span> n <span class="kw">in</span> [<span class="nu">1</span>, <span class="nu">12</span>, <span class="nu">123</span>, <span class="nu">1234</span>, <span class="nu">12345</span>, <span class="nu">123456</span>]:
+    t = tok.tokenize(<span class="st">" "</span> + str(n))
+    print(<span class="st">f"  {str(n):8s} → {len(t)} token(s): {t}"</span>)
+
+<span class="cm"># Random number test: what fraction of 4-digit numbers are single tokens?</span>
+four_digit = [str(i) <span class="kw">for</span> i <span class="kw">in</span> range(<span class="nu">1000</span>, <span class="nu">10000</span>)]
+single = sum(<span class="nu">1</span> <span class="kw">for</span> n <span class="kw">in</span> four_digit <span class="kw">if</span> len(tok.tokenize(<span class="st">" "</span> + n)) == <span class="nu">1</span>)
+print(<span class="st">f"\n4-digit numbers that are single tokens: {single}/9000 ({100*single/9000:.1f}%)"</span>)
+
+<span class="cm"># Technical vocabulary fragmentation</span>
+print(<span class="st">"\n=== Technical term fragmentation ==="</span>)
+terms = [<span class="st">"backpropagation"</span>, <span class="st">"eigenvalue"</span>, <span class="st">"cosine"</span>,
+         <span class="st">"hyperparameter"</span>, <span class="st">"stochastic"</span>, <span class="st">"regularisation"</span>]
+<span class="kw">for</span> term <span class="kw">in</span> terms:
+    t = tok.tokenize(<span class="st">" "</span> + term)
+    print(<span class="st">f"  {term:20s} → {t}"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step4">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 4: Special Tokens</h2>
+      <pre class="code-block"><span class="kw">from</span> transformers <span class="kw">import</span> GPT2Tokenizer, BertTokenizer
+
+gpt2 = GPT2Tokenizer.from_pretrained(<span class="st">"gpt2"</span>)
+bert = BertTokenizer.from_pretrained(<span class="st">"bert-base-uncased"</span>)
+
+print(<span class="st">"GPT-2 special tokens:"</span>)
+print(<span class="st">f"  EOS: '{gpt2.eos_token}' (id={gpt2.eos_token_id})"</span>)
+print(<span class="st">f"  BOS: '{gpt2.bos_token}' (id={gpt2.bos_token_id})"</span>)
+
+print(<span class="st">"\nBERT special tokens:"</span>)
+print(<span class="st">f"  [CLS]: id={bert.cls_token_id}"</span>)
+print(<span class="st">f"  [SEP]: id={bert.sep_token_id}"</span>)
+print(<span class="st">f"  [MASK]: id={bert.mask_token_id}"</span>)
+print(<span class="st">f"  [PAD]: id={bert.pad_token_id}"</span>)
+print(<span class="st">f"  [UNK]: id={bert.unk_token_id}"</span>)
+
+<span class="cm"># Show BERT encoding with special tokens</span>
+sentence = <span class="st">"The cat sat on the mat."</span>
+enc = bert(sentence, return_tensors=<span class="st">"pt"</span>)
+ids = enc[<span class="st">"input_ids"</span>][<span class="nu">0</span>].tolist()
+tokens = bert.convert_ids_to_tokens(ids)
+print(<span class="st">f"\nBERT tokenisation of '{sentence}':"</span>)
+print(<span class="st">f"  {tokens}"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step5">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 5: ViT Patch Tokenization</h2>
+      <pre class="code-block"><span class="kw">import</span> torch
+<span class="kw">from</span> transformers <span class="kw">import</span> ViTModel, ViTFeatureExtractor
+<span class="kw">from</span> PIL <span class="kw">import</span> Image
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+fe = ViTFeatureExtractor.from_pretrained(<span class="st">"google/vit-base-patch16-224"</span>)
+model = ViTModel.from_pretrained(<span class="st">"google/vit-base-patch16-224"</span>)
+
+<span class="cm"># Create a synthetic 224×224 RGB image</span>
+img_array = np.random.randint(<span class="nu">0</span>, <span class="nu">255</span>, (<span class="nu">224</span>, <span class="nu">224</span>, <span class="nu">3</span>), dtype=np.uint8)
+img = Image.fromarray(img_array)
+
+<span class="cm"># Process image</span>
+inputs = fe(images=img, return_tensors=<span class="st">"pt"</span>)
+pixel_values = inputs[<span class="st">"pixel_values"</span>]  <span class="cm"># (1, 3, 224, 224)</span>
+
+print(<span class="st">f"Input image shape: {tuple(pixel_values.shape)}"</span>)
+print(<span class="st">f"Patch size: 16×16 pixels"</span>)
+print(<span class="st">f"Grid: {224//16}×{224//16} = {(224//16)**2} patches"</span>)
+print(<span class="st">f"Total tokens: 196 patches + 1 [CLS] = 197"</span>)
+
+<span class="kw">with</span> torch.no_grad():
+    outputs = model(pixel_values=pixel_values)
+
+hidden = outputs.last_hidden_state  <span class="cm"># (1, 197, 768)</span>
+print(<span class="st">f"\nViT output shape: {tuple(hidden.shape)}"</span>)
+print(<span class="st">f"[CLS] token norm: {hidden[0,0,:].norm():.3f}"</span>)
+print(<span class="st">f"Mean patch norm: {hidden[0,1:,:].norm(dim=-1).mean():.3f}"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step6">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 6: Acoustic Frames (wav2vec2)</h2>
+      <pre class="code-block"><span class="kw">import</span> torch
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">from</span> transformers <span class="kw">import</span> Wav2Vec2Model, Wav2Vec2Processor
+
+processor = Wav2Vec2Processor.from_pretrained(<span class="st">"facebook/wav2vec2-base-960h"</span>)
+model = Wav2Vec2Model.from_pretrained(<span class="st">"facebook/wav2vec2-base-960h"</span>)
+
+<span class="cm"># Synthesise a 2-second dummy audio signal at 16kHz</span>
+sr = <span class="nu">16000</span>
+duration = <span class="nu">2.0</span>
+t = np.linspace(<span class="nu">0</span>, duration, int(sr * duration))
+audio = np.sin(<span class="nu">2</span> * np.pi * <span class="nu">440</span> * t).astype(np.float32)  <span class="cm"># 440 Hz tone</span>
+
+inputs = processor(audio, sampling_rate=sr, return_tensors=<span class="st">"pt"</span>)
+print(<span class="st">f"Raw audio samples: {inputs.input_values.shape}"</span>)
+<span class="cm"># Expected: (1, 32000)</span>
+
+<span class="kw">with</span> torch.no_grad():
+    outputs = model(**inputs, output_hidden_states=<span class="kw">True</span>)
+
+<span class="cm"># CNN feature extractor output (before transformer)</span>
+cnn_feats = outputs.extract_features  <span class="cm"># (1, T, 512)</span>
+print(<span class="st">f"CNN features shape: {tuple(cnn_feats.shape)}"</span>)
+expected_frames = int(sr * duration / <span class="nu">320</span>)  <span class="cm"># 320 samples per frame</span>
+print(<span class="st">f"Expected frames: ~{expected_frames} (1 per 20ms)"</span>)
+print(<span class="st">f"Actual frames: {cnn_feats.shape[1]}"</span>)
+
+<span class="cm"># Full transformer output</span>
+last = outputs.last_hidden_state  <span class="cm"># (1, T, 768)</span>
+print(<span class="st">f"Transformer output: {tuple(last.shape)}"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="expected">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Expected Outputs</h2>
+      <table class="comparison-table">
+        <thead><tr><th>Step</th><th>Key Output</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>1a</td><td>GPT-2 vocabulary size</td><td>50,257</td></tr>
+          <tr><td>1b</td><td>Longest token</td><td>"ologically" or similar 10-char token</td></tr>
+          <tr><td>2</td><td>"2024" in GPT-2</td><td>['2024'] — single token</td></tr>
+          <tr><td>2</td><td>"Zürich" in GPT-2</td><td>['Z', 'ür', 'ich'] — 3 tokens</td></tr>
+          <tr><td>3</td><td>4-digit single-token %</td><td>~35% (years 1900-2023 are single tokens)</td></tr>
+          <tr><td>5</td><td>ViT token count</td><td>197 (196 patches + 1 CLS)</td></tr>
+          <tr><td>6</td><td>CNN frames for 2s audio</td><td>~99 frames (1 per 20ms)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="lesson-section" id="stretch">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Stretch Goals</h2>
+      <div class="exercise-box">
+        <h3>Stretch Challenges</h3>
+        <ul class="step-list">
+          <li class="step-item"><span class="step-pill">S1</span><span class="step-text">Implement BPE from scratch for a toy corpus of 5 short sentences. Run 10 merge iterations and print the vocabulary after each merge.</span></li>
+          <li class="step-item"><span class="step-pill">S2</span><span class="step-text">Find the 20 tokens in GPT-2's vocabulary that cover the most text in Project Gutenberg's "Alice in Wonderland" (download as plain text). What fraction of all tokens do the top-20 cover?</span></li>
+          <li class="step-item"><span class="step-pill">S3</span><span class="step-text">Load a multilingual model (e.g., XLM-RoBERTa) and compare tokenization of the same sentence in 5 different languages. Which language has the highest fragmentation rate?</span></li>
+          <li class="step-item"><span class="step-pill">S4</span><span class="step-text">For ViT, visualise the 16×16 patches of a real image (use any JPEG). Draw the patch grid on top of the image using matplotlib.</span></li>
+        </ul>
+      </div>
+      <a class="next-btn" href="probing-walkthrough.html">Next Lab: Probing →</a>
+    </div>
+  </main>
+</div>
+
+<footer><span>Mechanistic Interpretability Atlas</span> · MIT License · 2025</footer>
+<script>
+const sections = document.querySelectorAll('.lesson-section');
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.remove('active'));
+      const active = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
