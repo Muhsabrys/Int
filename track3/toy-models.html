@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toy Models — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="../index.html">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../track1/tokenization.html">Foundations</a></li>
+      <li><a href="../track2/attention-mechanics.html">Architecture</a></li>
+      <li><a href="hidden-states.html">Interpretability</a></li>
+      <li><a href="../track4/code-labs-hub.html">Code Labs</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">In This Lesson</span>
+    <ul class="sidebar-nav">
+      <li><a href="#metadata">Metadata</a></li>
+      <li><a href="#outcomes">Learning Outcomes</a></li>
+      <li><a href="#setup">Conceptual Setup</a></li>
+      <li><a href="#intuition">Intuition First</a></li>
+      <li><a href="#technical">Technical Core</a></li>
+      <li><a href="#worked-example">Worked Example</a></li>
+      <li><a href="#mechint">Mech. Interpretation</a></li>
+      <li><a href="#exercise">Hands-on Exercise</a></li>
+      <li><a href="#artifact">Real Model Artifact</a></li>
+      <li><a href="#assessment">Assessment Check</a></li>
+      <li><a href="#references">References</a></li>
+      <li><a href="#next">Next Step</a></li>
+    </ul>
+  </aside>
+
+  <main class="lesson-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a><span>›</span>
+      <a href="hidden-states.html">Track 3</a><span>›</span>
+      Toy Models
+    </div>
+
+    <div class="lesson-section" id="metadata">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Toy Models of Computation</h2>
+      <div class="meta-box">
+        <div class="meta-item"><label>Track</label><span>Track 3: Interpretability</span></div>
+        <div class="meta-item"><label>Lesson</label><span>7 of 8</span></div>
+        <div class="meta-item"><label>Prerequisites</label><span>All previous Track 3 lessons</span></div>
+        <div class="meta-item"><label>Est. Time</label><span>90 min</span></div>
+        <div class="meta-item"><label>Modalities</label><span>Text · Vision · Speech</span></div>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="outcomes">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Learning Outcomes</h2>
+      <ul class="outcomes-list">
+        <li>Explain the role of toy models as controlled interpretability environments</li>
+        <li>Describe grokking and what it tells us about generalisation and circuits</li>
+        <li>Train a 1-layer transformer on modular arithmetic and inspect its algorithm</li>
+        <li>Identify the Fourier-basis algorithm that transformers use for modular addition</li>
+        <li>Discuss what toy model findings do and do not generalise to large models</li>
+        <li>Design a toy model experiment to test a specific mechanistic hypothesis</li>
+      </ul>
+    </div>
+
+    <div class="lesson-section" id="setup">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Conceptual Setup</h2>
+      <p>Toy models are small, fully tractable neural networks trained on simple, well-defined tasks. They are the <em>fruit flies of mechanistic interpretability</em>: their small size makes complete analysis tractable (you can visualise every weight, run every ablation), and the simplicity of the task means you can verify the discovered algorithm against the known correct algorithm.</p>
+      <p>The key paradigm in toy model research is <strong>grokking</strong> (Power et al. 2022): the phenomenon where a small transformer, trained on modular arithmetic, initially memorises the training data (100% train accuracy, ~chance test accuracy) then, after much more training, suddenly "groks" the underlying algorithm (test accuracy jumps from chance to 100%). This grokking event corresponds to a phase transition in the internal representations — from memorisation circuits to generalisation circuits.</p>
+      <p>The insights from toy models include: (1) transformers can implement elegant mathematical algorithms (Fourier analysis for modular arithmetic); (2) phase transitions in generalisation correspond to changes in circuit structure; (3) regularisation (weight decay) accelerates grokking by penalising memorisation circuits; (4) mechanistic analysis can fully reverse-engineer the algorithm learned by a toy model.</p>
+    </div>
+
+    <div class="lesson-section" id="intuition">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Intuition First</h2>
+      <p>Imagine teaching a child to compute (a + b) mod 113. The child could memorise all 113² = 12769 pairs — like a lookup table. This works perfectly on the training set but requires enormous memory and doesn't generalise to new tasks. Alternatively, the child could learn the elegant algorithm: convert a and b to positions on a clock with 113 hours, add the angles, read off the result. This algorithm generalises to any values and uses much less memory.</p>
+      <p>Grokking shows that neural networks start with the memorisation strategy and, with sufficient training, discover the algorithmic strategy. The moment of "grokking" is when the network throws away the lookup table and implements the clock-arithmetic algorithm. Mechanistic interpretability allows us to verify this — and indeed, Nanda et al. 2023 showed that the post-grokking network literally computes Fourier components of a and b, multiplies them, and reads off the result.</p>
+    </div>
+
+    <div class="lesson-section" id="technical">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Technical Core</h2>
+      <p><strong>Task:</strong> Given tokens a, b, =, predict (a + b) mod p. Model: 1-layer transformer, 2 attention heads, d=128. Training set: 30% of all (a,b) pairs; test set: remaining 70%.</p>
+      <p><strong>The Fourier algorithm:</strong> After grokking, the model computes:</p>
+      <pre class="ascii-diagram">Embedding of a → Fourier components: e^{2πiωa/p} for key frequencies ω
+Embedding of b → Fourier components: e^{2πiωb/p}
+Attention: multiply Fourier components of a and b
+  → e^{2πiω(a+b)/p}  [product-to-sum trigonometric identity]
+MLP: extract the answer from the trigonometric pattern
+  → argmax over 0..p-1 of correlation with target Fourier pattern</pre>
+      <p>This is a genuinely elegant algorithm. The transformer has independently discovered something akin to the Number Theoretic Transform (NTT), a variant of the Fast Fourier Transform used in modular arithmetic.</p>
+      <p><strong>Verifying the algorithm:</strong> After training, check that: (1) embedding vectors for a cluster by value of sin(2πa/p) — they form a circle in PCA; (2) the weight matrix W_logits has high cosine similarity with the Fourier basis vectors for the key frequencies; (3) ablating non-Fourier attention heads has no effect on performance; (4) the network uses exactly the "key frequencies" that are predicted by the algorithm.</p>
+      <table class="comparison-table">
+        <thead><tr><th>Phase</th><th>Train Acc</th><th>Test Acc</th><th>Circuit</th></tr></thead>
+        <tbody>
+          <tr><td>Memorisation</td><td>100%</td><td>~5%</td><td>Lookup table in embeddings</td></tr>
+          <tr><td>Transition</td><td>100%</td><td>50-90%</td><td>Competing circuits</td></tr>
+          <tr><td>Grokking</td><td>100%</td><td>100%</td><td>Fourier algorithm circuit</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="lesson-section" id="worked-example">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Worked Example</h2>
+      <pre class="code-block"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+p = <span class="nu">113</span>  <span class="cm"># prime modulus</span>
+
+<span class="cm"># Minimal 1-layer transformer for modular addition</span>
+<span class="kw">class</span> ModularTransformer(nn.Module):
+    <span class="kw">def</span> __init__(self, p, d=<span class="nu">128</span>, n_heads=<span class="nu">2</span>):
+        super().__init__()
+        self.embed = nn.Embedding(p + <span class="nu">1</span>, d)  <span class="cm"># +1 for = token</span>
+        self.pos   = nn.Embedding(<span class="nu">3</span>, d)       <span class="cm"># positions: a, b, =</span>
+        self.attn  = nn.MultiheadAttention(d, n_heads, batch_first=<span class="kw">True</span>)
+        self.mlp   = nn.Sequential(
+            nn.Linear(d, d * <span class="nu">4</span>), nn.ReLU(), nn.Linear(d * <span class="nu">4</span>, d))
+        self.unembed = nn.Linear(d, p)
+
+    <span class="kw">def</span> forward(self, a, b):
+        eq = torch.full((a.shape[<span class="nu">0</span>],), p, device=a.device)  <span class="cm"># = token</span>
+        x  = torch.stack([a, b, eq], dim=<span class="nu">1</span>)                  <span class="cm"># (B, 3)</span>
+        x  = self.embed(x) + self.pos(torch.arange(<span class="nu">3</span>, device=x.device))
+        x, _ = self.attn(x, x, x)
+        x  = x + self.mlp(x)
+        <span class="kw">return</span> self.unembed(x[:, <span class="nu">2</span>, :])  <span class="cm"># predict from = position</span>
+
+<span class="cm"># Generate all (a,b) pairs</span>
+all_a = torch.arange(p).repeat(p)
+all_b = torch.arange(p).repeat_interleave(p)
+all_c = (all_a + all_b) % p
+
+<span class="cm"># Train/test split (30/70)</span>
+perm = torch.randperm(p * p)
+train_idx, test_idx = perm[:int(<span class="nu">0.3</span> * p * p)], perm[int(<span class="nu">0.3</span> * p * p):]
+
+model = ModularTransformer(p)
+opt   = torch.optim.AdamW(model.parameters(), lr=<span class="nu">1e-3</span>, weight_decay=<span class="nu">1.0</span>)
+print(<span class="st">"Training... (grokking typically occurs around epoch 500-1000)"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="mechint">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Mechanistic Interpretation Layer</h2>
+      <h3 style="font-family:var(--display);font-weight:400;margin:1.5rem 0 0.5rem">Text Models</h3>
+      <p>Toy model findings generalise to large LMs in specific ways. Induction heads — first identified in 2-layer toy models — were confirmed in GPT-2 and all subsequent transformers. The Fourier basis for modular arithmetic is present in GPT-2's numeric token representations. The phase transition in grokking mirrors the "task acquisition" phase transition observed when fine-tuning large models on reasoning tasks. The key limitation: toy model circuits are smaller and simpler — large model circuits may implement the same algorithm with more redundancy and distributed representation.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:1.5rem 0 0.5rem">Vision Models</h3>
+      <p>Toy vision experiments use small CNNs trained on synthetic datasets where the ground truth algorithm is known. For example, a CNN trained to detect circles implements approximate edge detection in layer 1 and curvature combination in layer 2 — verifiable because we know the geometry of circles. ViT toy models trained on synthetic shape datasets show that attention heads implement spatial grouping — attending to all patches of the same shape.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:1.5rem 0 0.5rem">Speech Models</h3>
+      <p>Toy ASR models trained on synthetic speech (rule-based TTS output) show cleaner circuit structure than models trained on natural speech. In a toy model trained to transcribe synthetic vowels, the first attention layer implements a spectral matching circuit: it attends from the output token position to the audio frame with the highest formant energy matching the target vowel's F1/F2 pattern. This is a clean example of a "query-from-output, key-from-audio" attention pattern.</p>
+    </div>
+
+    <div class="lesson-section" id="exercise">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Hands-on Exercise</h2>
+      <div class="exercise-box">
+        <h3>Reproduce Grokking on Modular Addition</h3>
+        <ul class="step-list">
+          <li class="step-item"><span class="step-pill">1</span><span class="step-text">Implement the ModularTransformer from the worked example. Use p=113, d=128, 2 heads, weight_decay=1.0.</span></li>
+          <li class="step-item"><span class="step-pill">2</span><span class="step-text">Train for 2000 epochs. Log train and test accuracy every 10 epochs.</span></li>
+          <li class="step-item"><span class="step-pill">3</span><span class="step-text">Plot train and test accuracy over time. Identify the grokking epoch (when test acc jumps from below 20% to above 90%).</span></li>
+          <li class="step-item"><span class="step-pill">4</span><span class="step-text">After grokking, apply PCA to the embedding matrix. Plot the embeddings coloured by value (0, 1, ..., 112). Do they form a circle?</span></li>
+          <li class="step-item"><span class="step-pill">5</span><span class="step-text">Compute the Discrete Fourier Transform of the embedding matrix rows. Find the dominant frequency. Does it match a predicted key frequency (typically ω = 14 or ω = 35 for p=113)?</span></li>
+        </ul>
+        <p><strong>Expected output:</strong> Grokking at ~epoch 600 with weight_decay=1.0. Circle PCA visible. Dominant DFT frequency at ω=14 (or similar).</p>
+        <p><strong>Reflection:</strong> What happens if you set weight_decay=0? Does grokking still occur? What does this tell you about the role of regularisation?</p>
+        <p><strong>Stretch:</strong> Try modular multiplication instead of addition. Does the model still grok? What algorithm does it use?</p>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="artifact">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Real Model Artifact</h2>
+      <p>Nanda et al. 2023 "Progress measures for grokking via mechanistic interpretability" fully reverse-engineered a 1-layer transformer trained on modular addition with p=113. Key findings: (1) the model uses exactly the Fourier algorithm described above; (2) there are exactly 5 "key frequencies" (ω = 14, 35, 41, 42, 52); (3) the algorithm can be expressed as 40 equations; (4) ablating any non-key-frequency component has no effect on accuracy; (5) the embedding space is geometrically a union of concentric circles in 2D, one per key frequency. The paper provides full code and weight checkpoints enabling exact reproduction.</p>
+    </div>
+
+    <div class="lesson-section" id="assessment">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Assessment Check</h2>
+      <div class="assessment-box">
+        <h3>Scenario 1</h3>
+        <p>You train a toy transformer on modular addition and find no grokking — test accuracy stays near chance even after 5000 epochs. What are the most likely causes?</p>
+        <p><em>Strong answer:</em> (1) Weight decay too low (0 or near 0): the memorisation circuit doesn't get penalised, so the generalisation circuit never forms. Fix: increase weight_decay to 0.5–2.0. (2) Training fraction too high (>60% of pairs): the memorisation circuit can fit enough pairs to avoid the need for generalisation. Fix: reduce to 30%. (3) Model too large: the model has enough capacity to memorise without needing the Fourier algorithm. Fix: reduce d to 64 or 32. (4) Learning rate too low: the optimisation is stuck. Fix: use learning rate warmup and then cosine decay.</p>
+      </div>
+      <div class="assessment-box">
+        <h3>Scenario 2</h3>
+        <p>A colleague argues that toy model findings are irrelevant to understanding GPT-4 because GPT-4 is trained on completely different data and has billions of parameters. How do you respond?</p>
+        <p><em>Strong answer:</em> Toy models are useful for discovering mechanism classes, not for claiming that GPT-4 uses exactly the same circuits. Specifically: (1) induction heads were found in toy models and confirmed in all tested transformers including GPT-2; (2) the Fourier algorithm for modular arithmetic was found in toy models and confirmed in GPT-2's number representations; (3) superposition was studied in toy models and confirmed in large models via SAEs. The appropriate claim is not "GPT-4 has this circuit" but "this class of mechanism is possible and worth looking for." The hypothesis-generation value of toy models is real even if the exact transfer is limited.</p>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="references">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>References</h2>
+      <ul class="ref-list">
+        <li>Power et al. 2022 — Grokking: Generalisation Beyond Overfitting</li>
+        <li>Nanda et al. 2023 — Progress Measures for Grokking via Mechanistic Interpretability</li>
+        <li>Elhage et al. 2021 — A Mathematical Framework for Transformer Circuits</li>
+        <li>Olsson et al. 2022 — In-context Learning and Induction Heads</li>
+        <li>Elhage et al. 2022 — Toy Models of Superposition</li>
+      </ul>
+    </div>
+
+    <div class="lesson-section" id="next">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Next Step</h2>
+      <p>Toy models give us ground-truth verification of mechanistic hypotheses. The final Track 3 lesson applies everything to <strong>Speech Mechanistic Interpretability</strong> — a deep dive into Whisper, wav2vec2, and how the techniques from text interpretability transfer to the speech domain.</p>
+      <a class="next-btn" href="speech-mechint-slides.html">Next: Speech MechInt Slides →</a>
+    </div>
+  </main>
+</div>
+<footer><span>Mechanistic Interpretability Atlas</span> · MIT License · 2025</footer>
+<script>
+const sections = document.querySelectorAll('.lesson-section');
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.remove('active'));
+      const active = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
