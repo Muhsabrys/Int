@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mechanistic Interpretability Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,200..900;1,9..144,200..900&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,100..900;1,9..40,100..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    /* === INDEX-SPECIFIC STYLES === */
+    /* Feature cards grid */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+    .feature-card {
+      background: var(--card);
+      padding: 1.8rem;
+      border-radius: 4px;
+    }
+    .feature-icon {
+      font-size: 1.8rem;
+      margin-bottom: 0.8rem;
+      display: block;
+    }
+    .feature-title {
+      font-family: var(--display);
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+      font-weight: 400;
+      color: var(--ink);
+    }
+    .feature-text {
+      font-family: var(--body);
+      font-weight: 300;
+      font-size: 0.92rem;
+      line-height: 1.7;
+      color: #4a4840;
+    }
+    /* Track cards grid */
+    .track-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 2rem;
+      margin-top: 1rem;
+    }
+    .track-card {
+      border-radius: 4px;
+      background: var(--card);
+      padding: 1.8rem;
+    }
+    .track-card-title {
+      font-family: var(--display);
+      font-size: 1.2rem;
+      font-weight: 400;
+      margin-bottom: 0.3rem;
+    }
+    .track-card-sub {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #8a8680;
+      margin-bottom: 1.2rem;
+      display: block;
+    }
+    .lesson-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .lesson-link {
+      font-family: var(--body);
+      font-size: 0.9rem;
+      color: var(--ink);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0;
+      border-bottom: 1px solid transparent;
+      transition: border-bottom-color 0.2s, color 0.2s;
+    }
+    .lesson-link .lesson-arrow {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      opacity: 0.4;
+      transition: opacity 0.2s;
+    }
+    .lesson-link:hover .lesson-arrow {
+      opacity: 1;
+    }
+    /* Per-track hover colours */
+    .track-amber .lesson-link:hover { color: var(--amber); border-bottom-color: var(--rule); }
+    .track-teal .lesson-link:hover  { color: var(--teal);  border-bottom-color: var(--rule); }
+    .track-rose .lesson-link:hover  { color: var(--rose);  border-bottom-color: var(--rule); }
+    .track-violet .lesson-link:hover { color: var(--violet); border-bottom-color: var(--rule); }
+    /* Prereq cards */
+    .prereq-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+    .prereq-card {
+      background: var(--card);
+      padding: 1.6rem;
+      border-radius: 4px;
+      border-top: 3px solid var(--rule);
+    }
+    .prereq-icon {
+      font-size: 1.6rem;
+      margin-bottom: 0.7rem;
+      display: block;
+    }
+    .prereq-title {
+      font-family: var(--display);
+      font-size: 1rem;
+      font-weight: 400;
+      margin-bottom: 0.4rem;
+      color: var(--ink);
+    }
+    .prereq-text {
+      font-family: var(--body);
+      font-weight: 300;
+      font-size: 0.88rem;
+      line-height: 1.65;
+      color: #4a4840;
+    }
+    /* Lesson format list */
+    .format-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .format-item {
+      background: var(--card);
+      padding: 1.2rem 1.4rem;
+      border-radius: 4px;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.8rem;
+    }
+    .format-num {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--amber);
+      flex-shrink: 0;
+      padding-top: 0.15rem;
+    }
+    .format-label {
+      font-family: var(--body);
+      font-size: 0.88rem;
+      font-weight: 300;
+      color: #2a2820;
+      line-height: 1.5;
+    }
+    @media (max-width: 860px) {
+      .track-grid,
+      .feature-grid,
+      .prereq-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- ===== NAVBAR ===== -->
+  <nav>
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">MI Atlas</a>
+      <ul class="nav-links">
+        <li><a href="track1/tokenization.html">Foundations</a></li>
+        <li><a href="track2/attention-mechanics.html">Architecture</a></li>
+        <li><a href="track3/hidden-states.html">Interpretability</a></li>
+        <li><a href="track4/code-labs-hub.html">Code Labs</a></li>
+      </ul>
+    </div>
+  </nav>
+  <!-- ===== HERO ===== -->
+  <section id="hero">
+    <canvas id="hero-canvas"></canvas>
+    <div class="hero-content">
+      <p class="hero-eyebrow">A Complete Course in</p>
+      <h1>Mechanistic <em>Interpretability</em><br>Atlas</h1>
+      <p class="hero-sub">From tokenization to circuits, from probing to causal interventions — a complete, production-quality course in understanding how neural networks compute. Covers text, vision, and speech models.</p>
+      <div class="hero-cta">
+        <a href="track1/tokenization.html" class="btn-primary">Start with Foundations →</a>
+        <a href="#curriculum" class="btn-ghost">View All Lessons</a>
+      </div>
+      <div class="hero-meta">
+        <div>
+          <span class="hero-stat-n">4</span>
+          <span class="hero-stat-l">Tracks</span>
+        </div>
+        <div>
+          <span class="hero-stat-n">20</span>
+          <span class="hero-stat-l">Lessons</span>
+        </div>
+        <div>
+          <span class="hero-stat-n">3</span>
+          <span class="hero-stat-l">Modalities</span>
+        </div>
+        <div>
+          <span class="hero-stat-n">6</span>
+          <span class="hero-stat-l">Code Labs</span>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- Wave transition -->
+  <svg class="wave-transition" viewBox="0 0 1440 64" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,32 C240,64 480,0 720,32 C960,64 1200,0 1440,32 L1440,64 L0,64 Z" fill="#faf8f3"/>
+  </svg>
+  <!-- ===== MAIN ===== -->
+  <main>
+    <!-- SECTION A: What You Will Learn -->
+    <div class="section-header reveal">
+      <span class="section-num">01 —</span>
+      <div>
+        <div class="section-dot-title">
+          <span class="dot" style="background:var(--amber);"></span>
+          <h2>What You Will <em>Learn</em></h2>
+        </div>
+      </div>
+    </div>
+    <div class="section-rule"></div>
+    <div class="feature-grid reveal">
+      <div class="feature-card">
+        <span class="feature-icon">🔍</span>
+        <div class="feature-title">Mechanistic Understanding</div>
+        <p class="feature-text">Learn to trace information through transformer layers, identify circuits, and understand which components causally drive model outputs.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">🧠</span>
+        <div class="feature-title">Multimodal Coverage</div>
+        <p class="feature-text">Every concept illustrated with text, vision (ViT), and speech (Whisper, wav2vec2) examples. No modality left behind.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">🔬</span>
+        <div class="feature-title">Hands-on Labs</div>
+        <p class="feature-text">Six complete code labs with step-by-step instructions, expected outputs, and stretch goals. Reproducible with open-source models.</p>
+      </div>
+      <div class="feature-card">
+        <span class="feature-icon">📐</span>
+        <div class="feature-title">Causal Methods</div>
+        <p class="feature-text">Go beyond correlation. Learn activation patching, path patching, and circuit-level causal tests that confirm rather than suggest.</p>
+      </div>
+    </div>
+    <div class="section-divider"></div>
+    <!-- SECTION B: Curriculum -->
+    <div id="curriculum" class="section-header reveal">
+      <span class="section-num">02 —</span>
+      <div>
+        <div class="section-dot-title">
+          <span class="dot" style="background:var(--teal);"></span>
+          <h2><em>Curriculum</em></h2>
+        </div>
+      </div>
+    </div>
+    <div class="section-rule"></div>
+    <div class="track-grid reveal">
+      <!-- Track 1: Foundations -->
+      <div class="track-card track-amber" style="border-top: 4px solid var(--amber);">
+        <div class="track-card-title accent-amber">Track 1: Foundations</div>
+        <span class="track-card-sub">Where it all begins</span>
+        <ul class="lesson-list">
+          <li>
+            <a href="track1/tokenization.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Tokenization
+            </a>
+          </li>
+          <li>
+            <a href="track1/embeddings.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Embeddings
+            </a>
+          </li>
+          <li>
+            <a href="track1/transformer-layers.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Transformer Layers
+            </a>
+          </li>
+          <li>
+            <a href="track1/prediction.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Prediction
+            </a>
+          </li>
+        </ul>
+      </div>
+      <!-- Track 2: Architecture -->
+      <div class="track-card track-teal" style="border-top: 4px solid var(--teal);">
+        <div class="track-card-title accent-teal">Track 2: Architecture</div>
+        <span class="track-card-sub">Inside the transformer</span>
+        <ul class="lesson-list">
+          <li>
+            <a href="track2/attention-mechanics.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Attention Mechanics
+            </a>
+          </li>
+          <li>
+            <a href="track2/mlp-mechanics.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              MLP Mechanics
+            </a>
+          </li>
+          <li>
+            <a href="track2/generation-mechanics.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Generation Mechanics
+            </a>
+          </li>
+        </ul>
+      </div>
+      <!-- Track 3: Interpretability -->
+      <div class="track-card track-rose" style="border-top: 4px solid var(--rose);">
+        <div class="track-card-title accent-rose">Track 3: Interpretability</div>
+        <span class="track-card-sub">Understanding what models do</span>
+        <ul class="lesson-list">
+          <li>
+            <a href="track3/hidden-states.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Hidden States
+            </a>
+          </li>
+          <li>
+            <a href="track3/layer-probing.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Layer Probing
+            </a>
+          </li>
+          <li>
+            <a href="track3/activation-patching.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Activation Patching
+            </a>
+          </li>
+          <li>
+            <a href="track3/circuits.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Circuits
+            </a>
+          </li>
+          <li>
+            <a href="track3/superposition.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Superposition
+            </a>
+          </li>
+          <li>
+            <a href="track3/feature-visualization.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Feature Visualization
+            </a>
+          </li>
+          <li>
+            <a href="track3/toy-models.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Toy Models
+            </a>
+          </li>
+          <li>
+            <a href="track3/speech-mechint-slides.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Speech MechInt Slides
+            </a>
+          </li>
+        </ul>
+      </div>
+      <!-- Track 4: Code Labs -->
+      <div class="track-card track-violet" style="border-top: 4px solid var(--violet);">
+        <div class="track-card-title accent-violet">Track 4: Code Labs</div>
+        <span class="track-card-sub">Hands-on implementation</span>
+        <ul class="lesson-list">
+          <li>
+            <a href="track4/code-labs-hub.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Code Labs Hub
+            </a>
+          </li>
+          <li>
+            <a href="track4/tokenization-walkthrough.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Tokenization Walkthrough
+            </a>
+          </li>
+          <li>
+            <a href="track4/probing-walkthrough.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Probing Walkthrough
+            </a>
+          </li>
+          <li>
+            <a href="track4/patching-walkthrough.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Patching Walkthrough
+            </a>
+          </li>
+          <li>
+            <a href="track4/speech-walkthrough.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              Speech Walkthrough
+            </a>
+          </li>
+          <li>
+            <a href="track4/sae-walkthrough.html" class="lesson-link">
+              <span class="lesson-arrow">→</span>
+              SAE Walkthrough
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+    <div class="section-divider"></div>
+    <!-- SECTION C: Lesson Format -->
+    <div class="section-header reveal">
+      <span class="section-num">03 —</span>
+      <div>
+        <div class="section-dot-title">
+          <span class="dot" style="background:var(--violet);"></span>
+          <h2>Lesson <em>Format</em></h2>
+        </div>
+      </div>
+    </div>
+    <div class="section-rule"></div>
+    <p class="body-text reveal" style="margin-bottom:1.5rem;">Every lesson in the Atlas follows a consistent 12-section structure. This predictable rhythm lets you focus on the material rather than navigating unfamiliar layouts. Each section builds on the last — from motivation through to practice and further reading.</p>
+    <div class="format-grid reveal">
+      <div class="format-item">
+        <span class="format-num">01</span>
+        <span class="format-label">Metadata &amp; Prerequisites</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">02</span>
+        <span class="format-label">Learning Outcomes</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">03</span>
+        <span class="format-label">Motivation &amp; Context</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">04</span>
+        <span class="format-label">Core Concept</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">05</span>
+        <span class="format-label">Detailed Mechanics</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">06</span>
+        <span class="format-label">Visual Diagram</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">07</span>
+        <span class="format-label">Code Walkthrough</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">08</span>
+        <span class="format-label">Multimodal Extensions</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">09</span>
+        <span class="format-label">Common Misconceptions</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">10</span>
+        <span class="format-label">Exercises</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">11</span>
+        <span class="format-label">Self-Assessment</span>
+      </div>
+      <div class="format-item">
+        <span class="format-num">12</span>
+        <span class="format-label">References &amp; Next Steps</span>
+      </div>
+    </div>
+    <div class="section-divider"></div>
+    <!-- SECTION D: Prerequisites -->
+    <div class="section-header reveal">
+      <span class="section-num">04 —</span>
+      <div>
+        <div class="section-dot-title">
+          <span class="dot" style="background:var(--green);"></span>
+          <h2><em>Prerequisites</em></h2>
+        </div>
+      </div>
+    </div>
+    <div class="section-rule"></div>
+    <div class="prereq-grid reveal">
+      <div class="prereq-card">
+        <span class="prereq-icon">🐍</span>
+        <div class="prereq-title">Python &amp; PyTorch Basics</div>
+        <p class="prereq-text">Comfortable writing Python functions and familiar with tensor operations in PyTorch or NumPy. You don't need to have trained models from scratch.</p>
+      </div>
+      <div class="prereq-card">
+        <span class="prereq-icon">📐</span>
+        <div class="prereq-title">Basic Linear Algebra</div>
+        <p class="prereq-text">Understanding of vectors, matrices, dot products, and matrix multiplication. Familiarity with concepts like eigenvectors is helpful but not required.</p>
+      </div>
+      <div class="prereq-card">
+        <span class="prereq-icon">🔭</span>
+        <div class="prereq-title">Curiosity About Models</div>
+        <p class="prereq-text">The most important prerequisite. A genuine desire to understand what happens inside neural networks — not just how to use them, but how they actually compute.</p>
+      </div>
+    </div>
+  </main>
+  <!-- ===== FOOTER ===== -->
+  <footer>
+    <div>Mechanistic Interpretability Atlas · <span>MIT License</span> · 2025</div>
+    <div>Built for learners who want to understand, not just apply.</div>
+  </footer>
+  <!-- ===== JAVASCRIPT ===== -->
+  <script>
+    /* ── Hero canvas: floating particles + oscilloscope lines ── */
+    (function () {
+      const canvas = document.getElementById('hero-canvas');
+      const ctx = canvas.getContext('2d');
+      let W, H, particles, osc;
+      function resize() {
+        W = canvas.width  = canvas.offsetWidth;
+        H = canvas.height = canvas.offsetHeight;
+      }
+      /* Particle definition */
+      function Particle() {
+        this.reset();
+      }
+      Particle.prototype.reset = function () {
+        this.x  = Math.random() * W;
+        this.y  = Math.random() * H;
+        this.r  = Math.random() * 1.8 + 0.4;
+        this.vx = (Math.random() - 0.5) * 0.35;
+        this.vy = (Math.random() - 0.5) * 0.35;
+        this.alpha = Math.random() * 0.6 + 0.2;
+        this.hue = Math.random() < 0.6 ? 34 : 180; /* amber or teal */
+      };
+      Particle.prototype.update = function () {
+        this.x += this.vx;
+        this.y += this.vy;
+        if (this.x < -10 || this.x > W + 10 || this.y < -10 || this.y > H + 10) {
+          this.reset();
+          this.x = Math.random() * W;
+          this.y = Math.random() * H;
+        }
+      };
+      Particle.prototype.draw = function () {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+        ctx.fillStyle = 'hsl(' + this.hue + ',70%,70%)';
+        ctx.globalAlpha = this.alpha;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      };
+      /* Oscilloscope line definition */
+      function OscLine(yFrac, freq, amp, speed, hue, alpha) {
+        this.yFrac  = yFrac;
+        this.freq   = freq;
+        this.amp    = amp;
+        this.speed  = speed;
+        this.hue    = hue;
+        this.alpha  = alpha;
+        this.offset = Math.random() * Math.PI * 2;
+        this.t      = 0;
+      }
+      OscLine.prototype.draw = function () {
+        const baseY = H * this.yFrac;
+        ctx.beginPath();
+        ctx.globalAlpha = this.alpha;
+        ctx.strokeStyle = 'hsl(' + this.hue + ',60%,65%)';
+        ctx.lineWidth   = 1;
+        for (let x = 0; x <= W; x += 2) {
+          const y = baseY + Math.sin((x / W) * this.freq * Math.PI * 2 + this.t + this.offset) * this.amp;
+          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        this.t += this.speed;
+      };
+      function init() {
+        resize();
+        particles = [];
+        for (let i = 0; i < 120; i++) {
+          particles.push(new Particle());
+        }
+        osc = [
+          new OscLine(0.30, 3, 18, 0.008, 34,  0.35),
+          new OscLine(0.45, 5, 12, 0.012, 180, 0.28),
+          new OscLine(0.60, 4, 22, 0.006, 34,  0.22),
+          new OscLine(0.72, 6, 10, 0.015, 180, 0.18),
+          new OscLine(0.20, 2, 30, 0.005, 34,  0.15),
+        ];
+      }
+      function drawConnections() {
+        const maxDist = 90;
+        for (let i = 0; i < particles.length; i++) {
+          for (let j = i + 1; j < particles.length; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < maxDist) {
+              ctx.beginPath();
+              ctx.strokeStyle = 'rgba(200,180,140,' + (1 - dist / maxDist) * 0.12 + ')';
+              ctx.lineWidth = 0.5;
+              ctx.moveTo(particles[i].x, particles[i].y);
+              ctx.lineTo(particles[j].x, particles[j].y);
+              ctx.stroke();
+            }
+          }
+        }
+      }
+      function frame() {
+        ctx.clearRect(0, 0, W, H);
+        osc.forEach(function (o) { o.draw(); });
+        drawConnections();
+        particles.forEach(function (p) {
+          p.update();
+          p.draw();
+        });
+        requestAnimationFrame(frame);
+      }
+      window.addEventListener('resize', function () {
+        resize();
+        init();
+      });
+      init();
+      frame();
+    }());
+    /* ── Scroll reveal ── */
+    (function () {
+      const els = document.querySelectorAll('.reveal');
+      const io  = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) {
+            e.target.classList.add('visible');
+            io.unobserve(e.target);
+          }
+        });
+      }, { threshold: 0.1 });
+      els.forEach(function (el) { io.observe(el); });
+    }());
+    /* ── Active nav link detection ── */
+    (function () {
+      const links = document.querySelectorAll('.nav-links a');
+      const path  = window.location.pathname;
+      links.forEach(function (a) {
+        if (a.getAttribute('href') && path.includes(a.getAttribute('href').split('/')[0])) {
+          a.style.opacity = '1';
+          a.style.fontWeight = '500';
+        }
+      });
+      /* Highlight on scroll for in-page hash sections */
+      const sections = document.querySelectorAll('main [id]');
+      if (sections.length) {
+        const sio = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) {
+            if (e.isIntersecting) {
+              links.forEach(function (a) {
+                if (a.getAttribute('href') === '#' + e.target.id) {
+                  a.style.opacity = '1';
+                } else {
+                  a.style.opacity = '0.7';
+                }
+              });
+            }
+          });
+        }, { rootMargin: '-40% 0px -55% 0px' });
+        sections.forEach(function (s) { sio.observe(s); });
+      }
+    }());
+  </script>
+</body>
+</html>
