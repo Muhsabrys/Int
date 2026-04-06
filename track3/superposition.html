@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Superposition — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="../index.html">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../track1/tokenization.html">Foundations</a></li>
+      <li><a href="../track2/attention-mechanics.html">Architecture</a></li>
+      <li><a href="hidden-states.html">Interpretability</a></li>
+      <li><a href="../track4/code-labs-hub.html">Code Labs</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">In This Lesson</span>
+    <ul class="sidebar-nav">
+      <li><a href="#metadata">Metadata</a></li>
+      <li><a href="#outcomes">Learning Outcomes</a></li>
+      <li><a href="#setup">Conceptual Setup</a></li>
+      <li><a href="#intuition">Intuition First</a></li>
+      <li><a href="#technical">Technical Core</a></li>
+      <li><a href="#worked-example">Worked Example</a></li>
+      <li><a href="#mechint">Mech. Interpretation</a></li>
+      <li><a href="#exercise">Hands-on Exercise</a></li>
+      <li><a href="#artifact">Real Model Artifact</a></li>
+      <li><a href="#assessment">Assessment Check</a></li>
+      <li><a href="#references">References</a></li>
+      <li><a href="#next">Next Step</a></li>
+    </ul>
+  </aside>
+
+  <main class="lesson-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a><span>›</span>
+      <a href="hidden-states.html">Track 3</a><span>›</span>
+      Superposition
+    </div>
+
+    <div class="lesson-section" id="metadata">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Superposition</h2>
+      <div class="meta-box">
+        <div class="meta-item"><label>Track</label><span>Track 3: Interpretability</span></div>
+        <div class="meta-item"><label>Lesson</label><span>5 of 8</span></div>
+        <div class="meta-item"><label>Prerequisites</label><span>MLP Mechanics, Circuits</span></div>
+        <div class="meta-item"><label>Est. Time</label><span>80 min</span></div>
+        <div class="meta-item"><label>Modalities</label><span>Text · Vision · Speech</span></div>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="outcomes">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Learning Outcomes</h2>
+      <ul class="outcomes-list">
+        <li>Explain the superposition hypothesis and why it arises in neural networks</li>
+        <li>Distinguish polysemanticity (neuron level) from superposition (geometry level)</li>
+        <li>Describe how Sparse Autoencoders (SAEs) recover monosemantic features</li>
+        <li>Explain the geometry of superposition: how features are packed as nearly-orthogonal vectors</li>
+        <li>Interpret the sparsity-capacity tradeoff and predict when superposition is likely</li>
+        <li>Evaluate SAE reconstruction quality using L0, L1, and explained variance metrics</li>
+      </ul>
+    </div>
+
+    <div class="lesson-section" id="setup">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Conceptual Setup</h2>
+      <p>The <strong>superposition hypothesis</strong>, introduced by Elhage et al. 2022, proposes that neural networks represent more features than they have dimensions by encoding features as <em>nearly orthogonal directions</em> in activation space rather than as individual neurons. A network with <em>d</em> neurons can represent up to O(d / sparsity) features when those features are sparse — i.e., only a small fraction are active at any given time.</p>
+      <p>This explains a long-standing puzzle in interpretability: why are individual neurons polysemantic? A neuron in GPT-2 layer 9 might activate for "cat", "dog", "France", and "logarithm" — apparently unrelated concepts. Under superposition, this is not a bug but a consequence of efficient packing: each "true" feature is distributed across multiple neurons, and each neuron participates in multiple features.</p>
+      <p>Superposition creates a fundamental challenge for interpretability: <em>the neuron basis is not the feature basis</em>. We cannot simply look at what each neuron does. We must find the features — the actual computational units — which live as directions in activation space. Sparse Autoencoders (SAEs) are designed to do exactly this.</p>
+      <div class="callout callout-rose">
+        <span class="callout-label">Core tension</span>
+        <p>Models need to represent more concepts than they have dimensions. Superposition is the solution — but it makes interpretation harder because no single neuron = no single concept.</p>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="intuition">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Intuition First</h2>
+      <p>Think of a city's street map. A city has thousands of buildings, but streets run in only a few directions (north-south, east-west, and diagonals). Each building is located using a combination of street coordinates. This is superposition: many buildings (features) encoded using few directions (dimensions). Two nearby buildings share coordinate components — but their full address distinguishes them.</p>
+      <p>The key requirement for superposition to work is <strong>sparsity</strong>: at any given time, only a few features are active. If every feature were always on, they would interfere catastrophically. With sparsity, the cross-feature interference averages to near zero.</p>
+      <p>Sparse Autoencoders are the tool that "de-superpose" activations. An SAE takes a d-dimensional activation vector, expands it to a much larger space (e.g., 4d or 64d), applies a sparsity-inducing activation (ReLU or TopK), then reconstructs the original. The expanded representation isolates individual features into individual dimensions of the wider space.</p>
+    </div>
+
+    <div class="lesson-section" id="technical">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Technical Core</h2>
+      <p><strong>Superposition geometry:</strong> features are vectors f_i ∈ ℝ^d with ||f_i|| ≈ 1. If there are N features and N >> d, they must be nearly orthogonal but not perfectly orthogonal. The interference between features i and j is (f_i · f_j)². With N features in d dimensions, the mean squared interference ≈ N/d². For sparsity p (fraction of features active), the expected loss from interference ≈ p × N/d².</p>
+      <pre class="ascii-diagram">Toy model: d=2, N=5 features
+Feature directions (nearly orthogonal in 2D):
+  f1 →  [1.0,  0.0]
+  f2 →  [0.6,  0.8]
+  f3 →  [-0.6, 0.8]
+  f4 →  [-1.0, 0.0]
+  f5 →  [0.0, -1.0]
+
+With sparsity=0.1, only ~1 feature active at a time:
+  interference ≈ 0.1 × 5/4 = 0.125  (manageable)
+With sparsity=0.5:
+  interference ≈ 0.5 × 5/4 = 0.625  (severe)</pre>
+
+      <p><strong>Sparse Autoencoder architecture:</strong></p>
+      <pre class="ascii-diagram">Input: x ∈ ℝ^d  (MLP activation at one token position)
+   ↓
+Encoder: h = ReLU(W_enc · (x - b_pre) + b_enc)  ∈ ℝ^N  (N >> d)
+   ↓
+Sparse h: most entries zero, few active
+   ↓
+Decoder: x̂ = W_dec · h + b_pre
+   ↓
+Loss = ||x - x̂||² + λ||h||₁
+         reconstruction    sparsity penalty</pre>
+
+      <p><strong>SAE training objective:</strong> minimise reconstruction loss while encouraging sparsity (L1 penalty on hidden activations). The decoder columns W_dec[:,i] are the "feature directions" — each is a d-dimensional vector in activation space.</p>
+      <table class="comparison-table">
+        <thead><tr><th>Metric</th><th>Meaning</th><th>Good Value</th></tr></thead>
+        <tbody>
+          <tr><td>L0 (mean active features)</td><td>Average sparsity of h</td><td>10–100 per token</td></tr>
+          <tr><td>L1 norm of h</td><td>Total activation magnitude</td><td>As low as possible</td></tr>
+          <tr><td>Explained variance</td><td>Fraction of x variance captured by x̂</td><td>>0.90</td></tr>
+          <tr><td>Dead feature fraction</td><td>Fraction of features never active</td><td><0.05</td></tr>
+          <tr><td>Feature interpretability %</td><td>Fraction of features with clear semantic meaning</td><td>Varies (20-80%)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout-violet">
+        <span class="callout-label">Dictionary Learning connection</span>
+        <p>SAEs are a form of dictionary learning: they find an overcomplete dictionary of features such that any activation can be represented as a sparse combination of dictionary atoms. This is related to ICA (Independent Component Analysis) and sparse coding (Olshausen & Field 1996).</p>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="worked-example">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Worked Example</h2>
+      <pre class="code-block"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+<span class="cm"># Minimal SAE implementation</span>
+<span class="kw">class</span> SparseAutoencoder(nn.Module):
+    <span class="kw">def</span> __init__(self, d_model, d_hidden, l1_coeff=<span class="nu">1e-3</span>):
+        super().__init__()
+        self.W_enc = nn.Linear(d_model, d_hidden, bias=<span class="kw">True</span>)
+        self.W_dec = nn.Linear(d_hidden, d_model, bias=<span class="kw">True</span>)
+        self.l1_coeff = l1_coeff
+        <span class="cm"># Normalise decoder columns to unit norm</span>
+        <span class="kw">with</span> torch.no_grad():
+            self.W_dec.weight.data = nn.functional.normalize(
+                self.W_dec.weight.data, dim=<span class="nu">0</span>)
+
+    <span class="kw">def</span> forward(self, x):
+        h = torch.relu(self.W_enc(x))       <span class="cm"># sparse hidden</span>
+        x_hat = self.W_dec(h)               <span class="cm"># reconstruction</span>
+        recon_loss = (x - x_hat).pow(<span class="nu">2</span>).mean()
+        l1_loss    = self.l1_coeff * h.abs().mean()
+        <span class="kw">return</span> x_hat, h, recon_loss + l1_loss
+
+<span class="cm"># Usage: extract MLP layer 9 activations from GPT-2 on a corpus,</span>
+<span class="cm"># then train the SAE on those activations.</span>
+<span class="cm"># d_model=768, d_hidden=768*8=6144 is a common choice.</span>
+sae = SparseAutoencoder(d_model=<span class="nu">768</span>, d_hidden=<span class="nu">6144</span>)
+print(<span class="st">f"SAE parameters: {sum(p.numel() for p in sae.parameters()):,}"</span>)
+<span class="cm"># 9,447,936 — about 8% of GPT-2-small</span></pre>
+    </div>
+
+    <div class="lesson-section" id="mechint">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Mechanistic Interpretation Layer</h2>
+      <h3 style="font-family:var(--display);font-weight:400;margin:1.5rem 0 0.5rem">Text Models</h3>
+      <p>Anthropic's large-scale SAE analysis of Claude 3 Sonnet (Templeton et al. 2024) found SAE features that are strikingly monosemantic: single features active for "DNA sequences", "the concept of bridge in music", "racist tropes", "the Golden Gate Bridge". One feature activated strongly for thousands of contexts involving the Golden Gate Bridge across languages, modalities, and contexts. Steering the model with this feature caused the model to describe itself as the Golden Gate Bridge — demonstrating causal influence on generation.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:1.5rem 0 0.5rem">Vision Models</h3>
+      <p>Park et al. 2023 applied dictionary learning to ViT activations and found that SAE features in later layers correspond to interpretable visual concepts: "dog ear", "red stripe", "window frame." Early layers yield texture and frequency features. The degree of monosemanticity increases with layer depth, consistent with the text findings.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:1.5rem 0 0.5rem">Speech Models</h3>
+      <p>Superposition in speech models has been studied in wav2vec2 and HuBERT. Research shows that hidden units in these models are polysemantic at the neuron level but that sparse linear decompositions yield features corresponding to phonemic categories, prosodic features, and speaker identity. The sparsity is lower in speech models than text models — audio frames carry dense, continuous information unlike discrete tokens.</p>
+    </div>
+
+    <div class="lesson-section" id="exercise">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Hands-on Exercise</h2>
+      <div class="exercise-box">
+        <h3>Visualise Superposition in a Toy Model</h3>
+        <ul class="step-list">
+          <li class="step-item"><span class="step-pill">1</span><span class="step-text">Implement the toy model from Elhage et al. 2022: a 1-layer network with ReLU, input dim=5, hidden dim=2. Train on random sparse binary vectors (sparsity=0.1).</span></li>
+          <li class="step-item"><span class="step-pill">2</span><span class="step-text">After training, plot the 5 weight vectors W[:,i] in 2D. Observe that they form a pentagon — equally spaced near-orthogonal directions.</span></li>
+          <li class="step-item"><span class="step-pill">3</span><span class="step-text">Repeat with sparsity=0.5. Observe that fewer features are represented — some collapse to zero.</span></li>
+          <li class="step-item"><span class="step-pill">4</span><span class="step-text">Train an SAE (d=2, d_hidden=10) on the hidden activations of the trained toy model. Check if the SAE recovers the original 5 features.</span></li>
+        </ul>
+        <p><strong>Expected output:</strong> With sparsity=0.1, the toy model should represent all 5 features in 2D superposition. With sparsity=0.5, it should represent at most 2-3 features. The SAE should recover near-perfect features with >0.9 cosine similarity to the ground truth.</p>
+        <p><strong>Reflection:</strong> Why does increasing sparsity allow more features to be stored? What is the geometric intuition?</p>
+        <p><strong>Stretch:</strong> Train the SAE with L1 coefficient ranging from 1e-5 to 1e-1. Plot L0 vs explained variance as a Pareto curve. Identify the optimal tradeoff point.</p>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="artifact">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Real Model Artifact</h2>
+      <p>Templeton et al. 2024 "Scaling and evaluating sparse autoencoders" (Anthropic) trained SAEs on Claude 3 Sonnet residual stream with expansion factor 8× (d=4096 → N=32768 features). Key findings: (1) 73% of features had a clear human-interpretable label; (2) dead features: &lt;2% after training with auxiliary loss; (3) mean L0 ≈ 25 (only 25 of 32768 features active per token); (4) explained variance >0.95; (5) features include multimodal concepts (same feature activates for the word "cat" and images of cats). The SAE weights and analysis tools are publicly available via Anthropic's interpretability team.</p>
+    </div>
+
+    <div class="lesson-section" id="assessment">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Assessment Check</h2>
+      <div class="assessment-box">
+        <h3>Scenario 1</h3>
+        <p>You train an SAE on GPT-2 layer 9 MLP activations and find that 40% of features are "dead" (never activate on your evaluation set). What are the most likely causes and how would you fix each?</p>
+        <p><em>Strong answer:</em> (1) L1 coefficient too high → features get suppressed during training. Fix: reduce λ. (2) Decoder columns are not unit-normalised → scale degeneracy causes some features to dominate. Fix: add norm constraint. (3) Evaluation set is too small/homogeneous → features that activate on rare inputs appear dead. Fix: increase evaluation set diversity. (4) d_hidden too large for the amount of training data → underdetermined. Fix: reduce d_hidden or train longer.</p>
+      </div>
+      <div class="assessment-box">
+        <h3>Scenario 2</h3>
+        <p>An SAE has high explained variance (0.97) but low feature interpretability (only 30% of features have clear labels). Is the SAE useful for interpretability?</p>
+        <p><em>Strong answer:</em> High explained variance means the SAE captures the variance faithfully, which is necessary but not sufficient for interpretability. Low label rate could mean: (1) many features are real but encode concepts that humans don't have ready labels for (e.g., syntactic microfeatures); (2) many features are "junk" — artifacts of SAE training that don't correspond to model-used concepts; (3) the labelling method (max-activating examples) is too coarse. The SAE is partially useful: the 30% interpretable features can still be used for steering and circuit analysis. Test usefulness by checking if the interpretable features have causal effects consistent with their proposed labels.</p>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="references">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>References</h2>
+      <ul class="ref-list">
+        <li>Elhage et al. 2022 — Toy Models of Superposition</li>
+        <li>Templeton et al. 2024 — Scaling and Evaluating Sparse Autoencoders</li>
+        <li>Bricken et al. 2023 — Towards Monosemanticity (Anthropic)</li>
+        <li>Olshausen & Field 1996 — Sparse Coding with an Overcomplete Basis Set</li>
+        <li>Park et al. 2023 — Linear Representations of Sentiment in Language Models</li>
+      </ul>
+    </div>
+
+    <div class="lesson-section" id="next">
+      <h2><span class="section-accent" style="background:var(--rose)"></span>Next Step</h2>
+      <p>Superposition explains why neurons are polysemantic and how SAEs recover features. The next lesson examines <strong>Feature Visualisation</strong> — techniques for understanding what any given feature (neuron or SAE direction) represents by finding or generating inputs that maximally activate it.</p>
+      <a class="next-btn" href="feature-visualization.html">Next: Feature Visualization →</a>
+    </div>
+  </main>
+</div>
+
+<footer>
+  <span>Mechanistic Interpretability Atlas</span> · MIT License · 2025
+</footer>
+<script>
+const sections = document.querySelectorAll('.lesson-section');
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.remove('active'));
+      const active = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
