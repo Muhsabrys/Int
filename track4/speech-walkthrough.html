@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lab 04: Speech Walkthrough — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="../index.html">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../track1/tokenization.html">Foundations</a></li>
+      <li><a href="../track2/attention-mechanics.html">Architecture</a></li>
+      <li><a href="../track3/hidden-states.html">Interpretability</a></li>
+      <li><a href="code-labs-hub.html">Code Labs</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">Lab 04</span>
+    <ul class="sidebar-nav">
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#setup">Setup</a></li>
+      <li><a href="#step1">Step 1: Load Audio</a></li>
+      <li><a href="#step2">Step 2: wav2vec2 Features</a></li>
+      <li><a href="#step3">Step 3: Layer Probing</a></li>
+      <li><a href="#step4">Step 4: Whisper Transcribe</a></li>
+      <li><a href="#step5">Step 5: Cross-Attention</a></li>
+      <li><a href="#step6">Step 6: Speaker Direction</a></li>
+      <li><a href="#expected">Expected Outputs</a></li>
+      <li><a href="#stretch">Stretch Goals</a></li>
+    </ul>
+  </aside>
+
+  <main class="lesson-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a><span>›</span>
+      <a href="code-labs-hub.html">Code Labs</a><span>›</span>
+      Lab 04: Speech
+    </div>
+
+    <div class="lesson-section" id="overview">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Lab 04: Speech Model Walkthrough</h2>
+      <div class="meta-box">
+        <div class="meta-item"><label>Track</label><span>Track 4: Code Labs</span></div>
+        <div class="meta-item"><label>Lab</label><span>04 of 05</span></div>
+        <div class="meta-item"><label>Time</label><span>~80 min</span></div>
+        <div class="meta-item"><label>Models</label><span>wav2vec2-base, Whisper-tiny</span></div>
+      </div>
+      <p>This lab walks through extracting and analysing representations from two major open-source speech models. You will visualise the spectrogram, extract layer-wise features from wav2vec2, run a phoneme-level linear probe, transcribe audio with Whisper, and visualise the cross-attention alignment pattern.</p>
+      <div class="callout callout-teal">
+        <span class="callout-label">Audio files</span>
+        <p>This lab uses the <code>datasets</code> library to load a small speech sample from LibriSpeech. No local audio files are needed — everything downloads automatically. If you have a WAV file, you can substitute it wherever <code>audio["array"]</code> appears.</p>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="setup">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Setup</h2>
+      <pre class="code-block"><span class="cm"># pip install transformers torch datasets librosa soundfile matplotlib numpy</span>
+
+<span class="kw">import</span> torch
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+<span class="kw">from</span> transformers <span class="kw">import</span> (
+    Wav2Vec2Model, Wav2Vec2Processor,
+    WhisperForConditionalGeneration, WhisperProcessor
+)
+<span class="kw">from</span> datasets <span class="kw">import</span> load_dataset
+
+<span class="cm"># Load one sample from LibriSpeech test-clean</span>
+ds = load_dataset(<span class="st">"hf-internal-testing/librispeech_asr_demo"</span>,
+                  <span class="st">"clean"</span>, split=<span class="st">"validation"</span>, trust_remote_code=<span class="kw">True</span>)
+sample = ds[<span class="nu">0</span>]
+audio  = sample[<span class="st">"audio"</span>]
+sr     = audio[<span class="st">"sampling_rate"</span>]  <span class="cm"># 16000</span>
+waveform = np.array(audio[<span class="st">"array"</span>], dtype=np.float32)
+
+print(<span class="st">f"Audio duration: {len(waveform)/sr:.2f}s at {sr}Hz"</span>)
+print(<span class="st">f"Ground truth: '{sample['text']}'"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step1">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 1: Visualise the Waveform and Spectrogram</h2>
+      <pre class="code-block"><span class="kw">import</span> librosa
+<span class="kw">import</span> librosa.display
+
+fig, axes = plt.subplots(<span class="nu">2</span>, <span class="nu">1</span>, figsize=(<span class="nu">12</span>, <span class="nu">5</span>))
+
+<span class="cm"># Waveform</span>
+axes[<span class="nu">0</span>].plot(np.linspace(<span class="nu">0</span>, len(waveform)/sr, len(waveform)),
+              waveform, color=<span class="st">"#c8832a"</span>, linewidth=<span class="nu">0.5</span>)
+axes[<span class="nu">0</span>].set_xlabel(<span class="st">"Time (s)"</span>)
+axes[<span class="nu">0</span>].set_ylabel(<span class="st">"Amplitude"</span>)
+axes[<span class="nu">0</span>].set_title(<span class="st">"Waveform"</span>)
+
+<span class="cm"># Log-Mel spectrogram</span>
+mel = librosa.feature.melspectrogram(y=waveform, sr=sr, n_mels=<span class="nu">80</span>)
+mel_db = librosa.power_to_db(mel, ref=np.max)
+librosa.display.specshow(mel_db, sr=sr, x_axis=<span class="st">"time"</span>, y_axis=<span class="st">"mel"</span>, ax=axes[<span class="nu">1</span>])
+axes[<span class="nu">1</span>].set_title(<span class="st">"80-channel Log-Mel Spectrogram"</span>)
+
+plt.tight_layout()
+plt.savefig(<span class="st">"speech_spectrogram.png"</span>, dpi=<span class="nu">150</span>)
+print(<span class="st">"Saved: speech_spectrogram.png"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step2">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 2: Extract wav2vec2 Layer Features</h2>
+      <pre class="code-block">processor = Wav2Vec2Processor.from_pretrained(<span class="st">"facebook/wav2vec2-base-960h"</span>)
+w2v_model = Wav2Vec2Model.from_pretrained(<span class="st">"facebook/wav2vec2-base-960h"</span>)
+w2v_model.eval()
+
+inputs = processor(waveform, sampling_rate=sr, return_tensors=<span class="st">"pt"</span>)
+
+<span class="kw">with</span> torch.no_grad():
+    outputs = w2v_model(**inputs, output_hidden_states=<span class="kw">True</span>)
+
+<span class="cm"># outputs.hidden_states: tuple of 13 tensors (1, T, 768)</span>
+<span class="cm"># outputs.extract_features: CNN output before transformer (1, T, 512)</span>
+
+print(<span class="st">f"Number of frames: {outputs.last_hidden_state.shape[1]}"</span>)
+print(<span class="st">f"Frame rate: ~{outputs.last_hidden_state.shape[1] / (len(waveform)/sr):.0f} fps"</span>)
+print(<span class="st">f"Hidden dim: {outputs.last_hidden_state.shape[2]}"</span>)
+print(<span class="st">f"Layers available: {len(outputs.hidden_states)} (incl. embedding)"</span>)
+
+<span class="cm"># Visualise layer-wise mean activation norm</span>
+norms = [outputs.hidden_states[l][<span class="nu">0</span>].norm(dim=-<span class="nu">1</span>).mean().item()
+         <span class="kw">for</span> l <span class="kw">in</span> range(len(outputs.hidden_states))]
+plt.figure(figsize=(<span class="nu">8</span>, <span class="nu">3</span>))
+plt.plot(norms, <span class="st">"o-"</span>, color=<span class="st">"#2a7c7c"</span>)
+plt.xlabel(<span class="st">"Layer"</span>); plt.ylabel(<span class="st">"Mean L2 norm"</span>)
+plt.title(<span class="st">"wav2vec2 Residual Stream Norm by Layer"</span>)
+plt.savefig(<span class="st">"w2v_norms.png"</span>, dpi=<span class="nu">150</span>)
+print(<span class="st">"Saved: w2v_norms.png"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step3">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 3: Phoneme-Level Linear Probe</h2>
+      <pre class="code-block"><span class="kw">from</span> sklearn.linear_model <span class="kw">import</span> LogisticRegression
+<span class="kw">from</span> sklearn.model_selection <span class="kw">import</span> cross_val_score
+<span class="kw">from</span> sklearn.preprocessing <span class="kw">import</span> StandardScaler
+
+<span class="cm"># Synthetic phoneme labels: voiced (1) vs voiceless (0)</span>
+<span class="cm"># Voiced: a,e,i,o,u,b,d,g,v,z,m,n,l,r</span>
+<span class="cm"># We approximate by labeling frames by energy quintile</span>
+<span class="cm"># (high energy ≈ vowels/voiced, low energy ≈ silences/voiceless)</span>
+energy = waveform ** <span class="nu">2</span>
+<span class="cm"># Resample energy to match number of frames</span>
+n_frames = outputs.last_hidden_state.shape[<span class="nu">1</span>]
+energy_ds = np.array([
+    energy[int(i * len(energy) / n_frames) : int((i+<span class="nu">1</span>) * len(energy) / n_frames)].mean()
+    <span class="kw">for</span> i <span class="kw">in</span> range(n_frames)
+])
+labels = (energy_ds > np.median(energy_ds)).astype(int)
+
+<span class="cm"># Probe each layer</span>
+print(<span class="st">"Probing for high-energy frames (proxy for voiced):"</span>)
+layer_scores = []
+<span class="kw">for</span> l <span class="kw">in</span> range(len(outputs.hidden_states)):
+    X = outputs.hidden_states[l][<span class="nu">0</span>].numpy()  <span class="cm"># (T, 768)</span>
+    X = StandardScaler().fit_transform(X)
+    clf = LogisticRegression(max_iter=<span class="nu">300</span>, C=<span class="nu">0.5</span>)
+    scores = cross_val_score(clf, X, labels, cv=<span class="nu">3</span>)
+    layer_scores.append(scores.mean())
+    print(<span class="st">f"  Layer {l:2d}: {scores.mean():.3f}"</span>)
+
+plt.figure(figsize=(<span class="nu">8</span>, <span class="nu">3</span>))
+plt.plot(layer_scores, <span class="st">"s-"</span>, color=<span class="st">"#9c3a4a"</span>)
+plt.xlabel(<span class="st">"Layer"</span>); plt.ylabel(<span class="st">"Probe Accuracy"</span>)
+plt.title(<span class="st">"wav2vec2 Layer-wise Probe (voiced vs voiceless proxy)"</span>)
+plt.savefig(<span class="st">"w2v_probing.png"</span>, dpi=<span class="nu">150</span>)
+print(<span class="st">"Saved: w2v_probing.png"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step4">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 4: Transcribe with Whisper</h2>
+      <pre class="code-block">whisper_proc  = WhisperProcessor.from_pretrained(<span class="st">"openai/whisper-tiny"</span>)
+whisper_model = WhisperForConditionalGeneration.from_pretrained(<span class="st">"openai/whisper-tiny"</span>)
+whisper_model.eval()
+
+features = whisper_proc(waveform, sampling_rate=sr, return_tensors=<span class="st">"pt"</span>).input_features
+
+<span class="kw">with</span> torch.no_grad():
+    predicted_ids = whisper_model.generate(features)
+
+transcript = whisper_proc.batch_decode(predicted_ids, skip_special_tokens=<span class="kw">True</span>)[<span class="nu">0</span>]
+print(<span class="st">f"Whisper transcript: '{transcript}'"</span>)
+print(<span class="st">f"Ground truth:       '{sample['text']}'"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step5">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 5: Visualise Cross-Attention Alignment</h2>
+      <pre class="code-block"><span class="cm"># Re-run with output_attentions=True to capture cross-attention</span>
+<span class="kw">with</span> torch.no_grad():
+    out_w_attn = whisper_model(
+        input_features=features,
+        decoder_input_ids=predicted_ids[:, :-<span class="nu">1</span>],
+        output_attentions=<span class="kw">True</span>
+    )
+
+<span class="cm"># Cross-attentions: list of (n_layers,) each (1, n_heads, T_text, T_audio)</span>
+cross_attns = out_w_attn.cross_attentions  <span class="cm"># available in encoder-decoder models</span>
+
+<span class="kw">if</span> cross_attns <span class="kw">is not None</span>:
+    <span class="cm"># Average across heads, pick middle decoder layer</span>
+    mid_layer = len(cross_attns) // <span class="nu">2</span>
+    avg_attn = cross_attns[mid_layer][<span class="nu">0</span>].mean(dim=<span class="nu">0</span>).numpy()  <span class="cm"># (T_text, T_audio)</span>
+
+    fig, ax = plt.subplots(figsize=(<span class="nu">12</span>, <span class="nu">4</span>))
+    im = ax.imshow(avg_attn, aspect=<span class="st">"auto"</span>, origin=<span class="st">"lower"</span>, cmap=<span class="st">"inferno"</span>)
+    ax.set_xlabel(<span class="st">"Audio frame"</span>)
+    ax.set_ylabel(<span class="st">"Output text token"</span>)
+    ax.set_title(<span class="st">f"Whisper Cross-Attention (decoder layer {mid_layer}, avg heads)"</span>)
+    plt.colorbar(im)
+    plt.tight_layout()
+    plt.savefig(<span class="st">"whisper_cross_attention.png"</span>, dpi=<span class="nu">150</span>)
+    print(<span class="st">"Saved: whisper_cross_attention.png"</span>)
+<span class="kw">else</span>:
+    print(<span class="st">"Cross-attention not available for generate() output. Use forward() directly."</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step6">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 6: Speaker Direction via PCA</h2>
+      <pre class="code-block"><span class="kw">from</span> sklearn.decomposition <span class="kw">import</span> PCA
+
+<span class="cm"># Use first 3 wav2vec2 samples from the dataset to find speaker direction</span>
+all_layer1 = []
+<span class="kw">for</span> i <span class="kw">in</span> range(min(<span class="nu">3</span>, len(ds))):
+    wav_i = np.array(ds[i][<span class="st">"audio"</span>][<span class="st">"array"</span>], dtype=np.float32)
+    inp_i = processor(wav_i, sampling_rate=sr, return_tensors=<span class="st">"pt"</span>)
+    <span class="kw">with</span> torch.no_grad():
+        out_i = w2v_model(**inp_i, output_hidden_states=<span class="kw">True</span>)
+    <span class="cm"># Take layer-1 representations, mean over time</span>
+    rep = out_i.hidden_states[<span class="nu">1</span>][<span class="nu">0</span>].mean(dim=<span class="nu">0</span>).numpy()  <span class="cm"># (768,)</span>
+    all_layer1.append(rep)
+
+all_layer1 = np.stack(all_layer1)  <span class="cm"># (3, 768)</span>
+
+<span class="cm"># For a real study you'd need many more samples per speaker</span>
+<span class="cm"># Here we just show the PCA directions</span>
+pca = PCA(n_components=<span class="nu">2</span>).fit(all_layer1)
+print(<span class="st">f"PCA explained variance ratio: {pca.explained_variance_ratio_}"</span>)
+print(<span class="st">f"PC1 norm: {np.linalg.norm(pca.components_[0]):.3f}"</span>)
+print(<span class="st">"(In a full study with many speakers, PC1 would correlate with speaker identity)"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="expected">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Expected Outputs</h2>
+      <table class="comparison-table">
+        <thead><tr><th>Step</th><th>Expected Output</th></tr></thead>
+        <tbody>
+          <tr><td>Step 1</td><td>Waveform + 80-channel spectrogram saved as PNG</td></tr>
+          <tr><td>Step 2</td><td>~50 frames for 1s audio, norms increase with depth</td></tr>
+          <tr><td>Step 3</td><td>Voiced probe accuracy peaks at layer 5–8 (~0.80+)</td></tr>
+          <tr><td>Step 4</td><td>Whisper-tiny transcript matches ground truth with few errors</td></tr>
+          <tr><td>Step 5</td><td>Roughly diagonal cross-attention heatmap (alignment)</td></tr>
+          <tr><td>Step 6</td><td>PC1 explains >40% of variance across samples</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="lesson-section" id="stretch">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Stretch Goals</h2>
+      <div class="exercise-box">
+        <h3>Extend the Speech Analysis</h3>
+        <ul class="step-list">
+          <li class="step-item"><span class="step-pill">S1</span><span class="step-text">Use forced alignment (pip install ctc-forced-aligner) to get word-level timestamps, then overlay them on the cross-attention heatmap. Do attention peaks align with word boundaries?</span></li>
+          <li class="step-item"><span class="step-pill">S2</span><span class="step-text">Run the same analysis on two recordings of the same text by different speakers. Compare layer-1 representations. How far apart are they in cosine distance?</span></li>
+          <li class="step-item"><span class="step-pill">S3</span><span class="step-text">Implement "layer drop" ablation: zero out each wav2vec2 transformer layer in turn. Plot WER (word error rate) on the LibriSpeech sample. Which layers are most critical?</span></li>
+          <li class="step-item"><span class="step-pill">S4</span><span class="step-text">Use Whisper-small instead of Whisper-tiny. Compare the cross-attention alignment quality. Does a larger model produce sharper, more monotone alignment?</span></li>
+        </ul>
+      </div>
+      <a class="next-btn" href="sae-walkthrough.html">Next Lab: SAE →</a>
+    </div>
+  </main>
+</div>
+
+<footer><span>Mechanistic Interpretability Atlas</span> · MIT License · 2025</footer>
+<script>
+const sections = document.querySelectorAll('.lesson-section');
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.remove('active'));
+      const active = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
