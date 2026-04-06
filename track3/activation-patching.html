@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Activation Patching — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,600&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../index.html">Home</a></li>
+      <li><a href="../index.html#tracks">Tracks</a></li>
+      <li><a href="../index.html#about">About</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">In This Lesson</span>
+    <ul class="sidebar-nav">
+      <li><a href="#metadata">Metadata</a></li>
+      <li><a href="#outcomes">Learning Outcomes</a></li>
+      <li><a href="#setup">Conceptual Setup</a></li>
+      <li><a href="#intuition">Intuition First</a></li>
+      <li><a href="#technical">Technical Core</a></li>
+      <li><a href="#worked-example">Worked Example</a></li>
+      <li><a href="#mechint">Mech. Interpretation</a></li>
+      <li><a href="#exercise">Hands-on Exercise</a></li>
+      <li><a href="#artifact">Real Model Artifact</a></li>
+      <li><a href="#assessment">Assessment Check</a></li>
+      <li><a href="#references">References</a></li>
+      <li><a href="#next">Next Step</a></li>
+    </ul>
+  </aside>
+
+  <main class="lesson-content">
+
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span>›</span>
+      <a href="../index.html#tracks">Track 3: Interpretability</a>
+      <span>›</span>
+      Activation Patching
+    </div>
+
+    <!-- METADATA -->
+    <section id="metadata" class="lesson-section">
+      <h2>Activation Patching</h2>
+      <p style="font-family:var(--mono);font-size:0.8rem;color:#8a8680;margin-bottom:1.5rem;">Lesson 3 of 4 · Track 3: Interpretability</p>
+      <div class="meta-box">
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Track</div>
+          <div style="font-weight:400;">Track 3: Interpretability</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Lesson</div>
+          <div style="font-weight:400;">#3 of 4</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Prerequisites</div>
+          <div style="font-weight:400;">Lesson 2: Layer Probing</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Est. Time</div>
+          <div style="font-weight:400;">65 minutes</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Modalities</div>
+          <div style="font-weight:400;">Text · Vision · Speech</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OUTCOMES -->
+    <section id="outcomes" class="lesson-section">
+      <h2>Learning Outcomes</h2>
+      <p>This lesson develops the ability to design and execute activation patching experiments — the primary tool for establishing causal claims in mechanistic interpretability. You will leave able to implement clean/corrupt forward passes, write patching hooks, compute recovery scores, and interpret the resulting causal heatmaps.</p>
+      <ul class="outcomes-list">
+        <li>Explain the difference between probing (encoding) and activation patching (causal usage).</li>
+        <li>Define the recovery score and explain why values near 0 and 1 have different interpretations.</li>
+        <li>Implement a two-pass activation patching experiment using PyTorch forward hooks.</li>
+        <li>Distinguish between noising and denoising patching and explain when each is appropriate.</li>
+        <li>Describe the ROME result (Meng et al. 2022) and explain what it established about factual memory in GPT-2-XL.</li>
+        <li>Design a well-controlled patching experiment with a clean corruption strategy.</li>
+      </ul>
+    </section>
+
+    <!-- SETUP -->
+    <section id="setup" class="lesson-section">
+      <h2>Conceptual Setup</h2>
+      <p>Activation patching (also called <strong>causal tracing</strong> or <strong>interchange intervention</strong>) is the gold standard for establishing causal claims in mechanistic interpretability. While probing tells us what information is encoded, activation patching tells us what information is actually <em>used</em> in computation.</p>
+      <div class="callout-rose">
+        <strong>The core technique:</strong> Run two forward passes — one on a "clean" input (where the model gives the correct answer) and one on a "corrupted" input (where the model gives a wrong answer). Then patch specific activations from the clean run into the corrupted run and measure whether the output <em>recovers</em> toward the clean answer. Recovery implies causal necessity of the patched component.
+      </div>
+      <p>This technique is grounded in the causal inference framework. "Patching" is equivalent to a "do-intervention": we are forcing a specific component to take a particular value and observing the downstream effect. Unlike correlation-based approaches (probing), this directly tests causal relationships.</p>
+      <p>The key design choices are: (1) what to use as the "clean" input, (2) how to corrupt the input — corruption should specifically disrupt the feature of interest without changing unrelated features, (3) which components to patch — you can patch at any granularity from the full residual stream to individual attention head outputs, and (4) how to measure recovery — typically as a normalised difference between clean and corrupt logit scores.</p>
+    </section>
+
+    <!-- INTUITION -->
+    <section id="intuition" class="lesson-section">
+      <h2>Intuition First</h2>
+      <p>Imagine two factory lines producing the same product, but one line produces a defective item. You want to find which machine on the second line caused the defect.</p>
+      <ol class="step-list">
+        <li><strong>Identify the good line (clean run):</strong> The first factory line produces a perfect item. Every machine output on this line is correct.</li>
+        <li><strong>Identify the defective line (corrupted run):</strong> The second factory line has a defect somewhere. The final product is wrong.</li>
+        <li><strong>Swap one component at a time:</strong> Take machine A's output from the good line and install it in the same position on the defective line. Does the product improve?</li>
+        <li><strong>Find the causal machine:</strong> If swapping machine A fully fixes the defect, machine A is causally responsible. If it does nothing, machine A is not the culprit.</li>
+      </ol>
+      <div class="callout-amber">
+        <strong>The analogy:</strong> "Clean" = correct input/output pair. "Corrupted" = input designed to cause wrong output. "Swapping machine A" = patching one layer's activations from clean to corrupted. "Does the product improve?" = does the output logit for the correct answer recover?
+      </div>
+      <p>Crucially, you are not training anything or approximating anything. You are directly intervening on a running computation and observing the effect. This is the cleanest possible causal test available without access to training data or model weights.</p>
+    </section>
+
+    <!-- TECHNICAL -->
+    <section id="technical" class="lesson-section">
+      <h2>Technical Core</h2>
+
+      <h3>Setup and Recovery Score</h3>
+      <p>Let x_clean be the clean input and x_corrupt be the corrupted input. For a target token t* (the correct answer):</p>
+      <pre class="code-block"><code># Recovery score for component c:
+effect(c) = (logit_patched_c(t*) - logit_corrupt(t*)) /
+            (logit_clean(t*) - logit_corrupt(t*))
+
+# Interpretation:
+# effect = 0.0  -> patching this component has no effect (not causal)
+# effect = 0.5  -> patching partially restores correct prediction
+# effect = 1.0  -> patching fully restores correct prediction (causally sufficient)
+# effect > 1.0  -> patching overcorrects (component was suppressing the answer)</code></pre>
+
+      <h3>The Causal Tracing Diagram</h3>
+      <pre class="ascii-diagram">Clean:    "The Eiffel Tower is in [Paris]"    -> P("Paris") = 0.43
+              | forward pass                        ^
+           Save all activations at each layer      Output recovered?
+
+Corrupt:  "The Eiffel Tower is in [___]"    -> P("Paris") = 0.02
+(corrupt: add Gaussian noise to "Eiffel Tower" token embeddings)
+              | forward pass
+           Restore activation from clean at layer l, token pos t
+              |
+Patched:  Is P("Paris") restored toward 0.43?
+              |
+Plot recovery heatmap: layer x token position</pre>
+
+      <h3>What to Patch</h3>
+      <ul>
+        <li><strong>Full residual stream at layer l:</strong> Measures total causal contribution of all computations up to layer l at a given token position.</li>
+        <li><strong>Attention head output (head h, layer l):</strong> Measures whether this specific attention head is causally responsible.</li>
+        <li><strong>MLP output at layer l:</strong> Measures whether the MLP at this layer stores or processes the relevant information.</li>
+        <li><strong>Attention pattern (Q, K, V):</strong> Measures whether specific attention routing is causal.</li>
+      </ul>
+
+      <h3>Noising vs. Denoising</h3>
+      <table class="comparison-table">
+        <thead>
+          <tr><th>Direction</th><th>Method</th><th>Question Asked</th><th>Use Case</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Denoising</td><td>Patch FROM clean INTO corrupted</td><td>"Is this component sufficient to restore correct behavior?"</td><td>Standard causal tracing (ROME)</td></tr>
+          <tr><td>Noising</td><td>Patch noise INTO clean run</td><td>"Is this component necessary for correct behavior?"</td><td>Finding critical components</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Path Patching</h3>
+      <p>Standard activation patching patches at a single point in the computation graph. <strong>Path patching</strong> (Goldowsky-Dill et al. 2023) restricts patches to specific information paths — for example, patching only the signal flowing from attention head A's output to attention head B's key input, while leaving all other paths unchanged. This allows finer-grained decomposition of information flow.</p>
+
+      <h3>Comparison of Intervention Methods</h3>
+      <table class="comparison-table">
+        <thead>
+          <tr><th>Method</th><th>What Is Tested</th><th>Precision</th><th>Computational Cost</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Activation patching</td><td>Causal necessity/sufficiency of components</td><td>Medium — layer or head level</td><td>O(L) forward passes</td></tr>
+          <tr><td>Ablation (zero-out)</td><td>Necessity only (is component needed?)</td><td>Low — can destroy representations</td><td>O(L) forward passes</td></tr>
+          <tr><td>Attention knockout</td><td>Causal role of specific attention edges</td><td>High — edge level</td><td>O(L × T²) forward passes</td></tr>
+          <tr><td>Path patching</td><td>Causal role of specific information paths</td><td>Very high — path level</td><td>O(L²) or more forward passes</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- WORKED EXAMPLE -->
+    <section id="worked-example" class="lesson-section">
+      <h2>Worked Example</h2>
+      <p>A complete layer-by-layer activation patching experiment on GPT-2, testing which layers are causally responsible for retrieving factual associations.</p>
+      <pre class="code-block"><code>import torch
+import numpy as np
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+
+model = GPT2LMHeadModel.from_pretrained("gpt2")
+tok = GPT2Tokenizer.from_pretrained("gpt2")
+model.eval()
+
+clean_text = "The Eiffel Tower is in"
+corrupt_text = "The Golden Gate Bridge is in"  # different subject -> different answer
+
+clean_ids = tok(clean_text, return_tensors="pt")
+corrupt_ids = tok(corrupt_text, return_tensors="pt")
+
+target_token = tok.encode(" Paris")[0]
+
+# Step 1: Save clean activations via forward hooks
+clean_hidden = {}
+def save_hook(layer_idx):
+    def hook(module, inp, out):
+        clean_hidden[layer_idx] = out[0].detach()
+    return hook
+
+hooks = []
+for l in range(12):
+    h = model.transformer.h[l].register_forward_hook(save_hook(l))
+    hooks.append(h)
+
+with torch.no_grad():
+    clean_out = model(**clean_ids)
+clean_paris_logit = clean_out.logits[0, -1, target_token].item()
+for h in hooks:
+    h.remove()
+
+# Step 2: Get corrupted baseline
+with torch.no_grad():
+    corrupt_out = model(**corrupt_ids)
+corrupt_paris_logit = corrupt_out.logits[0, -1, target_token].item()
+
+print(f"Clean logit for Paris:   {clean_paris_logit:.3f}")
+print(f"Corrupt logit for Paris: {corrupt_paris_logit:.3f}")
+
+# Step 3: Patch each layer one at a time
+print("\\nRecovery scores by layer:")
+for patch_layer in range(12):
+    def patch_hook(module, inp, out):
+        patched = list(out)
+        # Patch last token position from clean run
+        patched[0] = patched[0].clone()
+        patched[0][0, -1, :] = clean_hidden[patch_layer][0, -1, :]
+        return tuple(patched)
+
+    h = model.transformer.h[patch_layer].register_forward_hook(patch_hook)
+    with torch.no_grad():
+        patched_out = model(**corrupt_ids)
+    h.remove()
+
+    patched_logit = patched_out.logits[0, -1, target_token].item()
+    recovery = (patched_logit - corrupt_paris_logit) / (clean_paris_logit - corrupt_paris_logit)
+    bar = "#" * int(max(0, recovery) * 20)
+    print(f"  Layer {patch_layer:2d}: recovery={recovery:.3f}  {bar}")</code></pre>
+      <div class="callout-rose">
+        <strong>Expected output:</strong> Recovery scores should be low for early layers (0–4), rise in middle layers (5–9), and peak at one or two layers. The peak identifies the layer most causally responsible for storing the Paris association.
+      </div>
+    </section>
+
+    <!-- MECHINT -->
+    <section id="mechint" class="lesson-section">
+      <h2>Mechanistic Interpretation Across Modalities</h2>
+
+      <h3>Text: The ROME Experiment (Meng et al. 2022)</h3>
+      <p>For the prompt "The Eiffel Tower is in ___", activation patching on GPT-2-XL was performed across all layers and all token positions. The result was a heatmap showing recovery score at each (layer, token position) coordinate.</p>
+      <p><strong>Key finding:</strong> Layers 15–17, specifically at the <em>last subject token</em> position ("Tower"), were most causally important. Patching these activations fully restored the "Paris" prediction even when the subject was corrupted with Gaussian noise.</p>
+      <p><strong>Why it matters:</strong> This was the first definitive localisation of factual memory in a large language model — identifying not just the layer but the precise token position responsible for factual retrieval.</p>
+      <div class="callout-amber">
+        <strong>Caution:</strong> This result is specific to GPT-2-XL and to this type of subject-relation-object factual query. Different model architectures, different fact types, and different relation types may show different localisation patterns. Do not over-generalise.
+      </div>
+
+      <h3>Vision: Activation Patching in ViT for Object Recognition</h3>
+      <p>Patch activations from an image containing a dog into an image without a dog, at different ViT layers. Measure recovery of the "dog" class logit.</p>
+      <ul>
+        <li><strong>Early layers (1–4):</strong> Low recovery — low-level features are shared across many classes.</li>
+        <li><strong>Middle layers (5–8):</strong> Recovery rises as object parts become discriminative.</li>
+        <li><strong>Late layers (8–10):</strong> High recovery — object identity strongly localized here.</li>
+      </ul>
+      <p><strong>What is measured:</strong> Recovery score for "dog" class logit per layer per patch token position.</p>
+      <div class="callout-teal">
+        <strong>Caution:</strong> ViT processes patches in parallel, so "token position" in the patching experiment must correspond to a meaningful image patch location (e.g., the patch containing the dog). Averaging over all patch positions gives a diluted signal.
+      </div>
+
+      <h3>Speech: Activation Patching for Voicing Distinction</h3>
+      <p>Run two utterances — one with /p/ (unvoiced) and one with /b/ (voiced, identical articulation otherwise). Patch residual stream from the /b/ utterance into the /p/ computation at each layer.</p>
+      <p><strong>Expected finding:</strong> Recovery of "voiced" classification is causal in layers 3–6 of wav2vec2. This is consistent with the probing result (voicing is linearly decodable in those layers) and confirms that the encoding is causally used.</p>
+      <div class="callout-violet">
+        <strong>Caution:</strong> Speech signals are continuous and time-aligned. The "token position" for speech patching must correspond to the correct audio frame (the voicing onset frame). Misalignment by even one frame can wash out the effect.
+      </div>
+    </section>
+
+    <!-- EXERCISE -->
+    <section id="exercise" class="lesson-section">
+      <h2>Hands-on Exercise</h2>
+      <div class="exercise-box">
+        <h3>Simple Activation Patching on GPT-2</h3>
+        <p><strong>Task:</strong> Identify which layers are causally responsible for a factual prediction in GPT-2.</p>
+
+        <ol class="step-list">
+          <li>Choose clean input: <em>"The president of the United States is"</em> (target: " Biden" or another factual answer).</li>
+          <li>Choose corrupted input: <em>"The CEO of Google is"</em> (different entity, different answer).</li>
+          <li>Run clean forward pass. Save all 12 layer outputs using forward hooks.</li>
+          <li>Run corrupted forward pass. Record the target token logit.</li>
+          <li>For each layer, patch the clean hidden state into the corrupted run at the last token position only.</li>
+          <li>Compute recovery score for each layer: (patched logit − corrupt logit) / (clean logit − corrupt logit).</li>
+          <li>Plot recovery score vs. layer index. Identify the peak recovery layer.</li>
+        </ol>
+
+        <p><strong>Expected output:</strong></p>
+        <ul>
+          <li>Recovery should peak at middle-to-late layers (8–11 for this type of factual query in GPT-2-small).</li>
+          <li>Early layers (0–4) should show near-zero recovery.</li>
+          <li>The peak recovery layer is where factual information is "retrieved" into the prediction stream.</li>
+        </ul>
+
+        <p><strong>Reflection questions:</strong></p>
+        <ul>
+          <li>Why does patching early layers produce less recovery than patching late layers? What does this tell you about when factual information is "retrieved"?</li>
+          <li>If you patch at layer 5 and get recovery 0.3, and at layer 9 you get recovery 0.8, what does this suggest about the layerwise computation?</li>
+        </ul>
+
+        <div class="callout-green">
+          <strong>Stretch challenge:</strong> Do position-resolved patching. Instead of patching at the last token position, patch only at the "United States" token position. Does recovery change? Now patch only at the "president" position. Which position gives higher recovery — the relation-describing token or the subject-final token? This replicates the key insight of Meng et al. 2022.
+        </div>
+      </div>
+    </section>
+
+    <!-- ARTIFACT -->
+    <section id="artifact" class="lesson-section">
+      <h2>Real Model Artifact</h2>
+      <div class="callout-rose">
+        <strong>Meng et al. (2022) — ROME: Locating and Editing Factual Associations in GPT</strong><br>
+        Dataset: 1,209 subject-relation-object triples from CounterFact dataset<br>
+        Model: GPT-2-XL (1.5B parameters, 48 layers)
+      </div>
+      <p>Key quantitative findings from the activation patching analysis:</p>
+      <ul>
+        <li><strong>78%</strong> of factual associations are most strongly localised in a contiguous band of middle MLP layers (layers 15–17 for GPT-2-XL).</li>
+        <li><strong>89%</strong> of the causal effect comes from the "last subject token" position — the final token of the subject entity span.</li>
+        <li><strong>Attention layers</strong> show a secondary effect in early-middle layers (5–10), interpreted as the model "routing" the subject representation to the prediction position.</li>
+        <li>The combined (layer 15–17 MLP) + (early attention) circuit accounts for &gt;95% of the total causal effect.</li>
+      </ul>
+      <p>These findings formed the empirical basis for the ROME model editing algorithm: to change a factual association, surgically modify the MLP weight matrices in layers 15–17 at the last-subject-token position. ROME achieves targeted edits with minimal effect on other facts.</p>
+    </section>
+
+    <!-- ASSESSMENT -->
+    <section id="assessment" class="lesson-section">
+      <h2>Assessment Check</h2>
+      <div class="assessment-box">
+        <h3>Scenario 1: Interpreting Recovery Scores</h3>
+        <p>You find recovery = 0.4 at layer 6 MLP, recovery = 0.7 at layer 9 MLP, and recovery = 0.2 at layer 9 attention. What can you conclude about the causal structure?</p>
+        <details>
+          <summary>Show strong answer</summary>
+          <p><strong>Layer 9 MLP is the primary causal location.</strong> Recovery of 0.7 means patching this component alone restores 70% of the gap between corrupt and clean outputs. Layer 6 MLP contributes (~40%) but is not alone sufficient. Layer 9 attention contributes minimally (20%) — it may route information but does not store the fact.</p>
+          <p><strong>Combined patching prediction:</strong> Patching layers 6 MLP + layer 9 MLP simultaneously would likely give recovery &gt; 0.7 (possibly near 0.9+) since their contributions appear partially additive.</p>
+          <p><strong>What this tells you:</strong> Factual storage is partially distributed, with a dominant location at layer 9 MLP. This is consistent with the ROME finding that factual associations are concentrated in middle-layer MLPs but with some spread across nearby layers.</p>
+        </details>
+
+        <h3>Scenario 2: Recovery Near 1.0 Everywhere</h3>
+        <p>You try to use activation patching to find the circuit for generating grammatically correct plurals. You find recovery near 1.0 at every layer. What does this mean and how would you redesign the experiment?</p>
+        <details>
+          <summary>Show strong answer</summary>
+          <p><strong>Recovery near 1.0 everywhere means the information is either redundantly encoded across all layers, or the corruption does not effectively disrupt the plural feature.</strong> If every layer can restore plural generation, it means many layers contain sufficient information — which is not informative about which layer is primarily responsible.</p>
+          <p><strong>Likely cause:</strong> The task (plurality) may be too easy — the model can re-derive it from many cues (the noun form, surrounding context, etc.) even after corruption at any single layer.</p>
+          <p><strong>Redesign:</strong> Use a more targeted corruption strategy. Instead of corrupting the entire input, specifically disrupt only the number-encoding dimensions of the hidden state, using a known linear direction for grammatical number (found via a probe). Patch only those dimensions. This "surgical corruption" will reveal which layer specifically routes the number feature, rather than giving every layer an opportunity to re-derive it from context.</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- REFERENCES -->
+    <section id="references" class="lesson-section">
+      <h2>References</h2>
+      <ul class="ref-list">
+        <li>Meng, K., et al. (2022). <em>Locating and Editing Factual Associations in GPT.</em> NeurIPS 2022.</li>
+        <li>Vig, J., et al. (2020). <em>Causal Mediation Analysis for Interpreting Neural NLP: The Case of Gender Bias.</em> arXiv 2020.</li>
+        <li>Goldowsky-Dill, N., et al. (2023). <em>Localizing Model Behavior with Path Patching.</em> arXiv 2023.</li>
+        <li>Wang, K., et al. (2022). <em>Interpretability in the Wild: a Circuit for Indirect Object Identification in GPT-2 small.</em> ICLR 2023.</li>
+        <li>Pearl, J. (2009). <em>Causality: Models, Reasoning, and Inference.</em> Cambridge University Press.</li>
+      </ul>
+    </section>
+
+    <!-- NEXT -->
+    <section id="next" class="lesson-section">
+      <h2>Next Step</h2>
+      <p>Activation patching identifies which components are causally responsible. The final lesson — <strong>Circuits</strong> — assembles these causal components into complete computational graphs that implement specific model behaviors end-to-end. Circuits are the culmination of the interpretability toolkit developed in this track.</p>
+      <a href="circuits.html" class="next-btn">Next: Circuits →</a>
+    </section>
+
+  </main>
+</div>
+
+<footer style="background:var(--ink);color:var(--cream);text-align:center;padding:2rem;font-family:var(--mono);font-size:0.75rem;margin-top:4rem;">
+  <p>MI Atlas · Track 3: Interpretability · <a href="../index.html" style="color:var(--rose-light);">Home</a></p>
+</footer>
+
+<script>
+  const sections = document.querySelectorAll('.lesson-section');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(link => {
+          link.classList.toggle('active', link.getAttribute('href') === '#' + entry.target.id);
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
