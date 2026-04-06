@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lab 02: Probing Walkthrough — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="../index.html">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../track1/tokenization.html">Foundations</a></li>
+      <li><a href="../track2/attention-mechanics.html">Architecture</a></li>
+      <li><a href="../track3/hidden-states.html">Interpretability</a></li>
+      <li><a href="code-labs-hub.html">Code Labs</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">Lab 02</span>
+    <ul class="sidebar-nav">
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#setup">Setup</a></li>
+      <li><a href="#step1">Step 1: Extract Hidden States</a></li>
+      <li><a href="#step2">Step 2: Build Probe Dataset</a></li>
+      <li><a href="#step3">Step 3: Train Probes</a></li>
+      <li><a href="#step4">Step 4: Layer Heatmap</a></li>
+      <li><a href="#step5">Step 5: Control Probes</a></li>
+      <li><a href="#step6">Step 6: MDL Probing</a></li>
+      <li><a href="#expected">Expected Outputs</a></li>
+      <li><a href="#stretch">Stretch Goals</a></li>
+    </ul>
+  </aside>
+
+  <main class="lesson-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a><span>›</span>
+      <a href="code-labs-hub.html">Code Labs</a><span>›</span>
+      Lab 02: Probing
+    </div>
+
+    <div class="lesson-section" id="overview">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Lab 02: Probing Walkthrough</h2>
+      <div class="meta-box">
+        <div class="meta-item"><label>Track</label><span>Track 4: Code Labs</span></div>
+        <div class="meta-item"><label>Lab</label><span>02 of 05</span></div>
+        <div class="meta-item"><label>Time</label><span>~60 min</span></div>
+        <div class="meta-item"><label>Models</label><span>BERT-base-uncased</span></div>
+      </div>
+      <p>In this lab you will extract hidden states from all 12 BERT layers, build a simple dataset of token-level linguistic properties (part-of-speech, capitalisation, position), train a linear probe on each layer's representations, and visualise which layers encode which properties. You will also implement a control probe to check that high accuracy isn't trivially explained by input statistics.</p>
+    </div>
+
+    <div class="lesson-section" id="setup">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Setup</h2>
+      <pre class="code-block"><span class="cm"># Required packages</span>
+<span class="cm"># pip install transformers torch scikit-learn matplotlib numpy</span>
+
+<span class="kw">import</span> torch
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">from</span> transformers <span class="kw">import</span> BertModel, BertTokenizerFast
+<span class="kw">from</span> sklearn.linear_model <span class="kw">import</span> LogisticRegression
+<span class="kw">from</span> sklearn.model_selection <span class="kw">import</span> cross_val_score
+<span class="kw">from</span> sklearn.preprocessing <span class="kw">import</span> StandardScaler
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+
+tok   = BertTokenizerFast.from_pretrained(<span class="st">"bert-base-uncased"</span>)
+model = BertModel.from_pretrained(<span class="st">"bert-base-uncased"</span>)
+model.eval()
+print(<span class="st">"BERT loaded. Layers: 12, Hidden dim: 768"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step1">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 1: Extract Hidden States</h2>
+      <pre class="code-block"><span class="kw">def</span> get_all_layer_hidden_states(sentences, tokenizer, model, max_len=<span class="nu">64</span>):
+    <span class="st">"""
+    Returns: list of (token_str, layer_hiddens) where
+             layer_hiddens is shape (13, 768) — one vector per layer
+    """</span>
+    all_tokens = []
+    all_hiddens = []  <span class="cm"># list of (13, 768) arrays</span>
+
+    <span class="kw">for</span> sent <span class="kw">in</span> sentences:
+        enc = tokenizer(sent, return_tensors=<span class="st">"pt"</span>,
+                        max_length=max_len, truncation=<span class="kw">True</span>,
+                        return_offsets_mapping=<span class="kw">True</span>)
+        <span class="kw">with</span> torch.no_grad():
+            out = model(
+                input_ids=enc[<span class="st">"input_ids"</span>],
+                attention_mask=enc[<span class="st">"attention_mask"</span>],
+                output_hidden_states=<span class="kw">True</span>
+            )
+
+        <span class="cm"># hidden_states: tuple of 13 tensors, each (1, T, 768)</span>
+        hs = torch.stack(out.hidden_states, dim=<span class="nu">0</span>)  <span class="cm"># (13, 1, T, 768)</span>
+        hs = hs[:, <span class="nu">0</span>, :, :]                          <span class="cm"># (13, T, 768)</span>
+
+        tokens = tokenizer.convert_ids_to_tokens(enc[<span class="st">"input_ids"</span>][<span class="nu">0</span>])
+        <span class="kw">for</span> pos, token <span class="kw">in</span> enumerate(tokens):
+            <span class="kw">if</span> token <span class="kw">in</span> [<span class="st">"[CLS]"</span>, <span class="st">"[SEP]"</span>, <span class="st">"[PAD]"</span>]:
+                <span class="kw">continue</span>
+            all_tokens.append(token)
+            all_hiddens.append(hs[:, pos, :].numpy())  <span class="cm"># (13, 768)</span>
+
+    <span class="kw">return</span> all_tokens, np.stack(all_hiddens)  <span class="cm"># (N, 13, 768)</span>
+
+<span class="cm"># Sample sentences covering diverse POS tags</span>
+sentences = [
+    <span class="st">"The quick brown fox jumps over the lazy dog."</span>,
+    <span class="st">"Scientists discovered a new species of deep-sea fish."</span>,
+    <span class="st">"Paris is the capital and most populous city of France."</span>,
+    <span class="st">"She carefully placed the fragile vase on the wooden shelf."</span>,
+    <span class="st">"Running fast is difficult when carrying heavy equipment."</span>,
+    <span class="st">"The transformer architecture was introduced in 2017."</span>,
+    <span class="st">"He said that he would never return to that place."</span>,
+    <span class="st">"Mathematical proofs require rigorous logical reasoning."</span>,
+]
+tokens, hiddens = get_all_layer_hidden_states(sentences, tok, model)
+print(<span class="st">f"Extracted {len(tokens)} token positions, {hiddens.shape[1]} layers, dim={hiddens.shape[2]}"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step2">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 2: Build Probe Dataset</h2>
+      <pre class="code-block"><span class="cm"># Create labels for three probing tasks</span>
+
+<span class="cm"># Task A: Is the token a capitalised word-piece?</span>
+labels_cap = np.array([<span class="nu">1</span> <span class="kw">if</span> t[<span class="nu">0</span>].isupper() <span class="kw">else</span> <span class="nu">0</span> <span class="kw">for</span> t <span class="kw">in</span> tokens])
+
+<span class="cm"># Task B: Is the token a subword (starts with ##)?</span>
+labels_sub = np.array([<span class="nu">1</span> <span class="kw">if</span> t.startswith(<span class="st">"##"</span>) <span class="kw">else</span> <span class="nu">0</span> <span class="kw">for</span> t <span class="kw">in</span> tokens])
+
+<span class="cm"># Task C: Rough POS — is the token a common function word?</span>
+function_words = {<span class="st">"the"</span>, <span class="st">"a"</span>, <span class="st">"an"</span>, <span class="st">"is"</span>, <span class="st">"are"</span>, <span class="st">"was"</span>, <span class="st">"of"</span>,
+                  <span class="st">"in"</span>, <span class="st">"on"</span>, <span class="st">"and"</span>, <span class="st">"or"</span>, <span class="st">"that"</span>, <span class="st">"he"</span>, <span class="st">"she"</span>,
+                  <span class="st">"it"</span>, <span class="st">"they"</span>, <span class="st">"to"</span>, <span class="st">"for"</span>, <span class="st">"with"</span>, <span class="st">"at"</span>}
+labels_func = np.array([<span class="nu">1</span> <span class="kw">if</span> t.lower() <span class="kw">in</span> function_words <span class="kw">else</span> <span class="nu">0</span>
+                        <span class="kw">for</span> t <span class="kw">in</span> tokens])
+
+print(<span class="st">f"Capitalised tokens: {labels_cap.sum()} / {len(labels_cap)}"</span>)
+print(<span class="st">f"Subword tokens: {labels_sub.sum()} / {len(labels_sub)}"</span>)
+print(<span class="st">f"Function word tokens: {labels_func.sum()} / {len(labels_func)}"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step3">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 3: Train Probes on Each Layer</h2>
+      <pre class="code-block"><span class="kw">def</span> probe_all_layers(hiddens, labels, task_name):
+    <span class="st">"""Train a logistic regression probe on each of 13 layers.
+    Returns: list of 13 cross-validation accuracy scores."""</span>
+    n_layers = hiddens.shape[<span class="nu">1</span>]
+    scores = []
+    <span class="kw">for</span> l <span class="kw">in</span> range(n_layers):
+        X = hiddens[:, l, :]          <span class="cm"># (N, 768)</span>
+        X = StandardScaler().fit_transform(X)
+        clf = LogisticRegression(max_iter=<span class="nu">200</span>, C=<span class="nu">0.1</span>)
+        cv_scores = cross_val_score(clf, X, labels, cv=<span class="nu">3</span>, scoring=<span class="st">"accuracy"</span>)
+        scores.append(cv_scores.mean())
+        print(<span class="st">f"  [{task_name}] Layer {l:2d}: {cv_scores.mean():.3f}"</span>)
+    <span class="kw">return</span> scores
+
+print(<span class="st">"Probing for capitalisation..."</span>)
+cap_scores  = probe_all_layers(hiddens, labels_cap,  <span class="st">"capitalisation"</span>)
+
+print(<span class="st">"Probing for subword..."</span>)
+sub_scores  = probe_all_layers(hiddens, labels_sub,  <span class="st">"subword"</span>)
+
+print(<span class="st">"Probing for function words..."</span>)
+func_scores = probe_all_layers(hiddens, labels_func, <span class="st">"function-word"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step4">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 4: Visualise Layer Heatmap</h2>
+      <pre class="code-block">layers = list(range(<span class="nu">13</span>))
+layer_labels = [<span class="st">"Emb"</span>] + [str(i) <span class="kw">for</span> i <span class="kw">in</span> range(<span class="nu">1</span>, <span class="nu">13</span>)]
+
+fig, ax = plt.subplots(figsize=(<span class="nu">12</span>, <span class="nu">4</span>))
+ax.plot(layers, cap_scores,  <span class="st">"o-"</span>, color=<span class="st">"#c8832a"</span>, label=<span class="st">"Capitalisation"</span>, linewidth=<span class="nu">2</span>)
+ax.plot(layers, sub_scores,  <span class="st">"s-"</span>, color=<span class="st">"#2a7c7c"</span>, label=<span class="st">"Subword (##)"</span>,    linewidth=<span class="nu">2</span>)
+ax.plot(layers, func_scores, <span class="st">"^-"</span>, color=<span class="st">"#9c3a4a"</span>, label=<span class="st">"Function word"</span>,   linewidth=<span class="nu">2</span>)
+ax.axhline(<span class="nu">0.5</span>, color=<span class="st">"#8a8680"</span>, linestyle=<span class="st">"--"</span>, linewidth=<span class="nu">1</span>, label=<span class="st">"Chance"</span>)
+ax.set_xticks(layers)
+ax.set_xticklabels(layer_labels)
+ax.set_xlabel(<span class="st">"Layer"</span>, fontsize=<span class="nu">11</span>)
+ax.set_ylabel(<span class="st">"Probe Accuracy (3-fold CV)"</span>, fontsize=<span class="nu">11</span>)
+ax.set_title(<span class="st">"BERT Layer-wise Probing Results"</span>, fontsize=<span class="nu">13</span>)
+ax.legend()
+ax.set_ylim(<span class="nu">0.4</span>, <span class="nu">1.05</span>)
+ax.grid(alpha=<span class="nu">0.3</span>)
+plt.tight_layout()
+plt.savefig(<span class="st">"probing_results.png"</span>, dpi=<span class="nu">150</span>)
+print(<span class="st">"Saved: probing_results.png"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step5">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 5: Control Probes</h2>
+      <p>A control probe uses a randomly shuffled label vector. If the control probe achieves near-chance accuracy but the real probe doesn't, that's evidence the real probe is using genuine information. If both are high, there's a data leakage issue.</p>
+      <pre class="code-block"><span class="kw">import</span> random
+
+<span class="cm"># Shuffle labels to create a random control</span>
+np.random.seed(<span class="nu">42</span>)
+labels_cap_shuffled = labels_cap.copy()
+np.random.shuffle(labels_cap_shuffled)
+
+print(<span class="st">"Control probe (shuffled capitalisation labels):"</span>)
+ctrl_scores = probe_all_layers(hiddens, labels_cap_shuffled, <span class="st">"control"</span>)
+
+<span class="cm"># Compare: real probe should beat control by a clear margin</span>
+print(<span class="st">"\n=== Real vs Control ==="</span>)
+<span class="kw">for</span> l <span class="kw">in</span> range(<span class="nu">13</span>):
+    delta = cap_scores[l] - ctrl_scores[l]
+    print(<span class="st">f"  Layer {l:2d}: real={cap_scores[l]:.3f}, control={ctrl_scores[l]:.3f}, Δ={delta:+.3f}"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step6">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 6: MDL (Minimum Description Length) Probe</h2>
+      <p>MDL probing measures not just accuracy but how much compression the hidden state provides. A probe that learns quickly (uses few samples) has lower MDL — it finds more genuine information. This addresses the criticism that complex probes can memorise even random labels.</p>
+      <pre class="code-block"><span class="kw">from</span> sklearn.linear_model <span class="kw">import</span> LogisticRegression
+<span class="kw">from</span> sklearn.metrics <span class="kw">import</span> log_loss
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+<span class="kw">def</span> online_code_length(X, y, n_splits=<span class="nu">10</span>):
+    <span class="st">"""Approximate MDL via online coding: train on first k samples,
+    evaluate loss on next k samples, sum over all splits."""</span>
+    N = len(y)
+    chunk = N // n_splits
+    total_bits = <span class="nu">0.0</span>
+    <span class="kw">for</span> i <span class="kw">in</span> range(<span class="nu">1</span>, n_splits):
+        train_X, train_y = X[:i*chunk], y[:i*chunk]
+        test_X,  test_y  = X[i*chunk:(i+<span class="nu">1</span>)*chunk], y[i*chunk:(i+<span class="nu">1</span>)*chunk]
+        clf = LogisticRegression(max_iter=<span class="nu">200</span>, C=<span class="nu">0.1</span>).fit(train_X, train_y)
+        probs = clf.predict_proba(test_X)
+        bits = log_loss(test_y, probs, normalize=<span class="kw">False</span>) / np.log(<span class="nu">2</span>)
+        total_bits += bits
+    <span class="kw">return</span> total_bits
+
+<span class="cm"># Compute code length for capitalisation at each layer</span>
+print(<span class="st">"MDL code length per layer (lower = more informative):"</span>)
+<span class="kw">for</span> l <span class="kw">in</span> range(<span class="nu">13</span>):
+    X = StandardScaler().fit_transform(hiddens[:, l, :])
+    cl = online_code_length(X, labels_cap)
+    print(<span class="st">f"  Layer {l:2d}: {cl:.1f} bits"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="expected">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Expected Outputs</h2>
+      <table class="comparison-table">
+        <thead><tr><th>Property</th><th>Peak Layer</th><th>Peak Accuracy</th><th>Interpretation</th></tr></thead>
+        <tbody>
+          <tr><td>Capitalisation</td><td>Layer 0 (embedding)</td><td>>0.95</td><td>Surface feature, captured at input</td></tr>
+          <tr><td>Subword (##)</td><td>Layer 0–1</td><td>>0.98</td><td>Structural, trivially encoded</td></tr>
+          <tr><td>Function word</td><td>Layer 3–5</td><td>0.85–0.90</td><td>Syntactic, encoded in early–mid layers</td></tr>
+          <tr><td>Control (shuffled)</td><td>N/A</td><td>~0.50–0.55</td><td>Chance baseline — confirms no leakage</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="lesson-section" id="stretch">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Stretch Goals</h2>
+      <div class="exercise-box">
+        <h3>Extend the Probing Study</h3>
+        <ul class="step-list">
+          <li class="step-item"><span class="step-pill">S1</span><span class="step-text">Use a proper POS tagger (spaCy or NLTK) to get gold-standard POS labels. How much higher is probe accuracy vs the function-word heuristic?</span></li>
+          <li class="step-item"><span class="step-pill">S2</span><span class="step-text">Probe for named entity type (PERSON / ORG / LOC). Label a set of sentences using spaCy NER. Which BERT layer best encodes entity type?</span></li>
+          <li class="step-item"><span class="step-pill">S3</span><span class="step-text">Replace logistic regression with an MLP probe (2 layers). Compare accuracy vs linear probe. Where does the MLP outperform, and what does this tell you about the linearity of the encoding?</span></li>
+          <li class="step-item"><span class="step-pill">S4</span><span class="step-text">Repeat the experiment with GPT-2 instead of BERT. Do the same properties peak at the same layers?</span></li>
+        </ul>
+      </div>
+      <a class="next-btn" href="patching-walkthrough.html">Next Lab: Patching →</a>
+    </div>
+  </main>
+</div>
+
+<footer><span>Mechanistic Interpretability Atlas</span> · MIT License · 2025</footer>
+<script>
+const sections = document.querySelectorAll('.lesson-section');
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.remove('active'));
+      const active = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
