@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transformer Layers — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,600&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../index.html">Home</a></li>
+      <li><a href="../index.html#tracks">Tracks</a></li>
+      <li><a href="../index.html#about">About</a></li>
+    </ul>
+  </div>
+</nav>
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">In This Lesson</span>
+    <ul class="sidebar-nav">
+      <li><a href="#metadata">Metadata</a></li>
+      <li><a href="#outcomes">Learning Outcomes</a></li>
+      <li><a href="#setup">Conceptual Setup</a></li>
+      <li><a href="#intuition">Intuition First</a></li>
+      <li><a href="#technical">Technical Core</a></li>
+      <li><a href="#worked-example">Worked Example</a></li>
+      <li><a href="#mechint">Mech. Interpretation</a></li>
+      <li><a href="#exercise">Hands-on Exercise</a></li>
+      <li><a href="#artifact">Real Model Artifact</a></li>
+      <li><a href="#assessment">Assessment Check</a></li>
+      <li><a href="#references">References</a></li>
+      <li><a href="#next">Next Step</a></li>
+    </ul>
+  </aside>
+  <main class="lesson-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span>›</span>
+      <a href="../index.html#tracks">Track 1: Foundations</a>
+      <span>›</span>
+      Transformer Layers
+    </div>
+    <!-- ═══════════════════════════════════════════════════ METADATA -->
+    <section id="metadata" class="lesson-section">
+      <h2>Transformer Layers</h2>
+      <p style="font-family:var(--mono);font-size:0.8rem;color:#8a8680;margin-bottom:1.5rem;">Lesson 3 of 4 · Track 1: Foundations</p>
+      <div class="meta-box">
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Track</div>
+          <div style="font-weight:400;">Track 1: Foundations</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Lesson</div>
+          <div style="font-weight:400;">#3 of 4</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Prerequisites</div>
+          <div style="font-weight:400;">Lessons 1–2: Tokenization, Embeddings</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Est. Time</div>
+          <div style="font-weight:400;">55 minutes</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Modalities</div>
+          <div style="font-weight:400;">Text · Vision · Speech</div>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ OUTCOMES -->
+    <section id="outcomes" class="lesson-section">
+      <h2>Learning Outcomes</h2>
+      <p>This lesson develops the core computational model of transformer layers—the repeated units that transform the residual stream from embeddings to final predictions. You will build both mathematical fluency and mechanistic intuition, culminating in the ability to trace information flow through a model layer by layer.</p>
+      <ul class="outcomes-list">
+        <li>State the mathematical form of a full transformer block—including pre-LayerNorm, multi-head attention, residual addition, and MLP sublayer—and explain why each component exists.</li>
+        <li>Describe the residual stream as a shared communication bus: explain what it means that every layer reads from and writes to the same vector, and why this enables linear decomposition of model computation.</li>
+        <li>Distinguish between pre-norm and post-norm architectures and articulate why pre-norm is generally preferred for mechanistic interpretability work.</li>
+        <li>Compare LayerNorm and RMSNorm mathematically and identify which models use which.</li>
+        <li>Reproduce the residual stream decomposition equation x_L = x_0 + Σ Δ_attn_l + Σ Δ_mlp_l and explain its implications for attribution.</li>
+        <li>Use <code style="font-family:var(--mono)">output_hidden_states=True</code> in the Hugging Face API to extract hidden states at every layer and visualise how residual stream norms evolve with depth.</li>
+        <li>Explain the "logit lens" technique at a conceptual level and its dependence on the residual stream linearity assumption.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ SETUP -->
+    <section id="setup" class="lesson-section">
+      <h2>Conceptual Setup</h2>
+      <p>A transformer layer is a modular computational unit that transforms the residual stream at each position. Every layer does the same two things in sequence: first, a multi-head attention mechanism routes information between positions across the sequence; second, an MLP (multi-layer perceptron) applies a position-wise nonlinear transformation that can be thought of as a learned memory lookup. The inputs and outputs of each sublayer have the same dimensionality—768 for GPT-2-small—and they are connected through additive residual connections. This residual architecture is the single most important structural feature of transformers from a mechanistic interpretability standpoint.</p>
+      <p>What makes transformers more interpretable than recurrent neural networks (RNNs) is precisely the residual stream. In an RNN, information at time step t is compressed into a fixed-size hidden state and then overwritten at time step t+1. The history of computations is destroyed. In a transformer, every layer adds its contribution to a shared vector (the residual stream) that persists unchanged unless a layer explicitly adds to it. The original token-level information from the embedding layer is never destroyed—it is always present in x_0, the first term of the residual stream sum. This means that at any layer, we can ask: "how much of the original embedding is still intact?", "which layers have added the most information?", and "is the current representation consistent with predicting a specific next token?"—all by examining the residual stream vector directly.</p>
+      <p>The key mathematical consequence is the residual stream decomposition theorem: the final residual stream x_L at any position can be written as a linear sum of individual contributions—the initial embedding x_0, plus a contribution from the attention sublayer of every layer, plus a contribution from the MLP sublayer of every layer. Crucially, this decomposition is exact (not approximate), because each sublayer only adds to the stream. There is no squashing, no gating, no multiplicative interaction between layers in the residual stream itself. This linearity is what makes techniques like direct logit attribution and causal tracing tractable: we can isolate the contribution of any single component and measure its effect on the final prediction without worrying about downstream nonlinear interactions (as long as we attribute at the level of logit contributions).</p>
+      <p>The depth of a transformer—its number of layers—reflects a trade-off between representational capacity and the ability to perform multi-step computation. GPT-2-small has 12 layers; GPT-2-XL has 48; GPT-4 is estimated to have over 100 layers in some configurations. Each additional layer can in principle implement a new "computation step" on top of the previous layer's output. The depth-versus-width trade-off is an active area of scaling research, and mechanistic interpretability has contributed to understanding it: interpretability work suggests that different layers specialize for different types of computation, with early layers handling local syntax and late layers handling factual knowledge retrieval and task-specific predictions.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ INTUITION -->
+    <section id="intuition" class="lesson-section">
+      <h2>Intuition First</h2>
+      <p>Think of the residual stream as a whiteboard. At the start of processing, the whiteboard shows the initial embeddings—one vector per token position. Every transformer layer is a committee member who reads from the whiteboard, does some analysis, and adds their findings to it without erasing what was already there. The attention sublayer reads the entire whiteboard and writes a summary. The MLP sublayer reads one position at a time and writes a processed version of what it found. No one erases anything. The whiteboard only grows richer.</p>
+      <p>This is a radically different architecture from what came before. In an RNN, each step has a single state vector that is completely replaced. If you want to remember what happened at step 1 when you are at step 100, the model must have explicitly preserved that information in every intermediate step. In a transformer, the information from step 0 is always available in the residual stream, because the residual connection ensures it was never overwritten. The transformer trades sequential state compression for parallel state accumulation, which is both computationally efficient and mechanistically tractable.</p>
+      <p>The key insight for interpretability is that because of residual connections, we can ask "what did layer 7 add to the whiteboard?" and get a meaningful, isolatable answer: Δ_attn_7 + Δ_mlp_7. We can measure the magnitude of this contribution (the L2 norm of the addition), its direction (does it point toward or away from the correct answer?), and its effect on specific downstream computations. This would not be possible if layer 7 transformed the entire residual stream multiplicatively—we would not be able to disentangle layer 7's contribution from the initial embedding or from layer 3's earlier addition.</p>
+      <p>The pre-norm versus post-norm distinction matters for this picture. In a pre-norm transformer (GPT-2, LLaMA), LayerNorm is applied to the residual stream before it enters the attention or MLP sublayer, but the unnormalized residual is what gets passed to the next layer. This means the residual stream accumulates actual values—the norms grow with depth. In a post-norm transformer (the original 2017 "Attention is All You Need" paper), LayerNorm is applied after adding the attention output to the residual—normalising the residual stream at every layer. Post-norm was found to be less stable to train for large models, and the field has largely converged on pre-norm variants. For interpretability, pre-norm is preferable: the residual stream has interpretable magnitude at every layer, and the decomposition theorem holds cleanly.</p>
+      <div class="callout callout-amber">
+        <div class="callout-label">Core Metaphor</div>
+        <p>The residual stream is a whiteboard. Attention writes cross-position summaries. MLP writes within-position refinements. Nothing is ever erased. This is why transformer computation can be decomposed into independent, additive contributions—and why mechanistic interpretability is tractable in a way that LSTM interpretability was not.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ TECHNICAL -->
+    <section id="technical" class="lesson-section">
+      <h2>Technical Core</h2>
+      <p>The full transformer block in pre-norm form (as used by GPT-2) applies the following sequence of operations to the residual stream x_l at layer l:</p>
+      <pre class="code-block"><span class="cm"># Pre-norm transformer block (GPT-2 style)</span>
+x_attn = x_l + Attention(LayerNorm₁(x_l))    <span class="cm"># attention sublayer</span>
+x_{l+1} = x_attn + MLP(LayerNorm₂(x_attn))  <span class="cm"># MLP sublayer</span>
+<span class="cm"># Equivalently, writing the contributions explicitly:</span>
+Δ_attn_l = Attention(LayerNorm₁(x_l))
+Δ_mlp_l  = MLP(LayerNorm₂(x_l + Δ_attn_l))
+x_{l+1}  = x_l + Δ_attn_l + Δ_mlp_l</pre>
+      <p>The residual stream at the final layer is therefore:</p>
+      <pre class="ascii-diagram">x_L = x_0  +  Σ_{l=0}^{L-1} Δ_attn_l  +  Σ_{l=0}^{L-1} Δ_mlp_l
+Where:
+  x_0         = token_embedding[t] + position_embedding[pos]
+  Δ_attn_l    = output of attention sublayer at layer l
+  Δ_mlp_l     = output of MLP sublayer at layer l
+This decomposition is EXACT (no approximation):
+x_L = x_0 + Δ_attn_0 + Δ_mlp_0 + Δ_attn_1 + Δ_mlp_1 + ... + Δ_attn_11 + Δ_mlp_11</pre>
+      <p>The internal structure of the residual stream flow through a single layer is:</p>
+      <pre class="ascii-diagram">Residual Stream x_l  ∈ ℝ^768
+       ↓
+   LayerNorm₁  (normalise: zero mean, unit variance × γ + β)
+       ↓  LN(x_l)  ∈ ℝ^768
+   ┌─────────────────────────────────┐
+   │  Multi-Head Attention            │
+   │  Q = LN(x_l) @ W_Q  ∈ ℝ^(T×d)  │
+   │  K = LN(x_l) @ W_K  ∈ ℝ^(T×d)  │
+   │  V = LN(x_l) @ W_V  ∈ ℝ^(T×d)  │
+   │  A = softmax(QK^T/√d) @ V        │
+   │  out = A @ W_O       ∈ ℝ^768    │
+   └─────────────────────────────────┘
+       ↓  Δ_attn_l
+   + x_l  ←──── residual connection
+       ↓  x_l + Δ_attn_l
+   LayerNorm₂
+       ↓
+   ┌─────────────────────────────────┐
+   │  MLP (Position-wise)             │
+   │  h = GeLU(x @ W_in)  ∈ ℝ^3072  │
+   │  out = h @ W_out      ∈ ℝ^768  │
+   └─────────────────────────────────┘
+       ↓  Δ_mlp_l
+   + (x_l + Δ_attn_l)  ←── residual
+       ↓
+   x_{l+1} = x_l + Δ_attn_l + Δ_mlp_l</pre>
+      <p><strong>LayerNorm</strong> normalises the residual stream vector x ∈ ℝ^d to have zero mean and unit variance, then applies a learned element-wise scale γ and shift β: LN(x) = (x − μ) / (σ + ε) × γ + β. The normalisation happens independently at each position and each layer—it does not mix information across positions or across layers. Its purpose is training stability: without normalisation, the residual stream could grow or shrink unboundedly, causing gradient explosions or vanishing.</p>
+      <p><strong>RMSNorm</strong> (used in LLaMA, Mistral, PaLM) simplifies LayerNorm by removing the mean subtraction: RMSNorm(x) = x / RMS(x) × γ, where RMS(x) = √(mean(x²)). This is computationally cheaper and has been found to work equally well in practice. The interpretation difference is subtle: LayerNorm removes both mean and variance from the residual stream at each step; RMSNorm removes only scale. For interpretability, this means that with LayerNorm, the residual stream is periodically recentred, making absolute magnitude comparisons across layers slightly less meaningful than with RMSNorm.</p>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Normalisation</th>
+            <th>Formula</th>
+            <th>Centring</th>
+            <th>Training Stability</th>
+            <th>Used By</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Post-LN</td><td>LN after attention + residual</td><td>Yes</td><td>Lower (original paper)</td><td>Original Transformer, BERT</td></tr>
+          <tr><td>Pre-LN</td><td>LN before attention input</td><td>Yes</td><td>Higher</td><td>GPT-2, GPT-3, PaLM</td></tr>
+          <tr><td>RMSNorm</td><td>Scale only, no centering</td><td>No</td><td>High, faster</td><td>LLaMA, Mistral, Falcon</td></tr>
+        </tbody>
+      </table>
+      <p>The <strong>MLP sublayer</strong> implements a two-layer neural network with a nonlinear activation function. For GPT-2, the MLP expands the 768-dimensional residual stream to 3072 dimensions (4× expansion), applies GeLU activation, then projects back to 768. This 4× expansion factor is standard across GPT-2 through GPT-3. The MLP sublayer can be interpreted as a key-value memory (Geva et al. 2021): each row of W_in acts as a "key" that detects a pattern in the residual stream, and the corresponding column of W_out is the "value" that gets added to the stream when that key is activated. Under this interpretation, the MLP is where the model stores factual associations—the "Paris is the capital of France" type of knowledge—while attention handles information routing between positions.</p>
+      <p>Information flow across layers shows clear specialisation: early layers (1–4 of 12 in GPT-2) primarily encode local syntactic structure—n-gram patterns, part-of-speech information, local grammatical agreement. Middle layers (5–8) encode semantic relationships—coreference, entity type, semantic role. Late layers (9–12) encode task-specific predictions—the model's current "best guess" for the next token, which becomes increasingly refined and specific as it approaches the final layer. This specialisation is not hard-coded; it emerges from training. But it is robust enough that interpretability researchers can make reliable predictions about which layers will be most informative for which types of analyses.</p>
+      <div class="callout callout-teal">
+        <div class="callout-label">Key Equation</div>
+        <p>The residual stream decomposition x_L = x_0 + Σ Δ_attn_l + Σ Δ_mlp_l is the mathematical foundation of mechanistic interpretability. It says: the model's final representation is the sum of its initial knowledge (x_0) plus what every attention head and every MLP layer contributed. We can measure each contribution independently. We can ask: "did layer 9's attention add or subtract evidence for 'Paris'?" This is only possible because of the additive residual structure.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ WORKED EXAMPLE -->
+    <section id="worked-example" class="lesson-section">
+      <h2>Worked Example</h2>
+      <p>We trace the sentence "The Eiffel Tower is in" through all 12 layers of GPT-2, extracting the hidden state at the last token position at every layer. This gives us 13 vectors (embedding layer + 12 transformer layers), each in ℝ^768, representing the progressive refinement of the model's representation of the context "The Eiffel Tower is in".</p>
+      <ol class="step-list">
+        <li class="step-item">
+          <span class="step-pill">01</span>
+          <span class="step-text">Load GPT-2Model (not GPT2LMHeadModel — we want raw hidden states, not logits) and tokenize the prompt.</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">02</span>
+          <span class="step-text">Run the forward pass with <code style="font-family:var(--mono)">output_hidden_states=True</code>. This returns a tuple of 13 tensors: one for the embedding layer output and one for each of the 12 transformer layers.</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">03</span>
+          <span class="step-text">For each layer, extract the hidden state at the last token position (<code style="font-family:var(--mono)">h[0, -1, :]</code>) and compute its L2 norm. Norms should increase with depth, as more information is added to the residual stream.</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">04</span>
+          <span class="step-text">Plot norm vs. layer depth. The shape of this curve reveals which layers make the largest contributions to the residual stream for this input.</span>
+        </li>
+      </ol>
+      <pre class="code-block"><span class="kw">import</span> torch
+<span class="kw">from</span> transformers <span class="kw">import</span> GPT2Model, GPT2Tokenizer
+model = GPT2Model.from_pretrained(<span class="st">"gpt2"</span>)
+tok   = GPT2Tokenizer.from_pretrained(<span class="st">"gpt2"</span>)
+model.eval()
+text   = <span class="st">"The Eiffel Tower is in"</span>
+inputs = tok(text, return_tensors=<span class="st">"pt"</span>)
+<span class="kw">with</span> torch.no_grad():
+    outputs = model(**inputs, output_hidden_states=<span class="nu">True</span>)
+hidden_states = outputs.hidden_states  <span class="cm"># tuple of 13 tensors, each (1, T, 768)</span>
+<span class="fn">print</span>(<span class="fn">f</span><span class="st">"Number of tokens in input: {inputs['input_ids'].shape[1]}"</span>)
+<span class="fn">print</span>(<span class="st">"Layer  | Last-token norm | Delta from prev"</span>)
+<span class="fn">print</span>(<span class="st">"-" * 45</span>)
+prev_norm = <span class="nu">0.0</span>
+<span class="kw">for</span> l, h <span class="kw">in</span> enumerate(hidden_states):
+    last_tok = h[<span class="nu">0</span>, -<span class="nu">1</span>, :]          <span class="cm"># (768,) — last position</span>
+    norm = last_tok.norm().item()
+    delta = norm - prev_norm
+    <span class="fn">print</span>(<span class="fn">f</span><span class="st">"  {l:2d}   |    {norm:6.2f}       | {delta:+.2f}"</span>)
+    prev_norm = norm
+<span class="cm"># Expected output (approximate):
+#   0   |    3.21       | +3.21   (embedding layer)
+#   1   |    4.87       | +1.66
+#   2   |    5.93       | +1.06
+#   ...
+#   9   |   12.41       | +1.53   (large jump — factual layer)
+#   10  |   13.22       | +0.81
+#   11  |   14.08       | +0.86
+#   12  |   15.44       | +1.36</span></pre>
+      <p>The norm profile reveals the structure of the residual stream accumulation. The embedding layer (layer 0) contributes the initial 3.2 L2 units. Each subsequent layer adds a positive contribution (the residual stream only grows with depth because contributions are added, never subtracted on average). Large delta values indicate layers that are "doing more work" on this particular input—for the Eiffel Tower example, we typically see larger jumps at layers 9–12 where factual knowledge retrieval (knowing "Paris" follows "Eiffel Tower is in") occurs.</p>
+      <div class="callout callout-violet">
+        <div class="callout-label">Interpretation</div>
+        <p>The norm of the residual stream grows monotonically with depth for well-trained transformers. A layer with an unusually large norm contribution is a candidate for "important computation" on that input. But norm alone is insufficient: a large-norm contribution pointing in the wrong direction (away from the correct answer) is harmful, while a small-norm contribution pointing precisely toward the correct token can be decisive. Always combine norm analysis with logit attribution (Lesson 4) to get the full picture.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ MECHINT -->
+    <section id="mechint" class="lesson-section">
+      <h2>Mechanistic Interpretation Layer</h2>
+      <p>Transformer layers show clear functional specialisation when analysed with interpretability tools. The following sections examine layer-by-layer analysis across three modalities.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Text: Logit Lens Reveals Factual Knowledge Localisation</h3>
+      <p><strong>What is measured:</strong> The "proto-prediction" at each layer—the distribution over next tokens that would result if we applied the unembedding matrix W_U to the residual stream at layer l. For the sentence "The Eiffel Tower is in ___", we track the rank of the token " Paris" across all 13 layers (embedding + 12 transformer layers).</p>
+      <p><strong>Why it matters:</strong> The logit lens tells us where in the model's depth a specific piece of factual knowledge "solidifies" into a confident prediction. For "The Eiffel Tower is in", if " Paris" achieves rank 1 first at layer 9, this suggests that the factual association "Eiffel Tower → Paris" is primarily stored in layers 7–9 (where the computation that produces that prediction occurs). Early layers produce generic predictions ("the", "a", ",") because they lack access to the factual associations that require broader context integration.</p>
+      <p><strong>Typical output:</strong> For factual recall prompts like "The capital of France is ___", " Paris" typically emerges in the top-3 predictions around layer 9/12 in GPT-2-small, stabilising at rank 1 by layer 11. For simpler syntactic predictions (e.g., "The cat sat on the ___"), the correct token often appears in the top-5 as early as layer 5, reflecting that syntactic completion requires less "deliberation" than factual recall.</p>
+      <p><strong>Cautious interpretation:</strong> The logit lens applies W_U to intermediate hidden states, implicitly assuming that W_U is a meaningful projection at all depths. This assumption is strongest for models with tied embedding/unembedding weights (like GPT-2) and weakest for models where the final-layer representations have been heavily specialised by task-specific training. Additionally, the rank of a token in the logit lens can fluctuate non-monotonically between layers—a layer may temporarily decrease the rank of the correct answer while still contributing positively to the final prediction through indirect effects on other token probabilities.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Vision: ViT Layer Hierarchy from Texture to Semantics</h3>
+      <p><strong>What is measured:</strong> Probing classifier accuracy for ImageNet class identity at each layer of Vision Transformer ViT-B/16. A linear probe trained on the CLS token's hidden state at layer l is evaluated on held-out ImageNet validation images. The accuracy curve as a function of layer depth reveals when class identity becomes linearly decodable from the representation.</p>
+      <p><strong>Why it matters:</strong> The layer specialisation in ViT mirrors that in GPT-2 but in the visual domain. Layer 1 representations capture low-level texture features—edge detectors, frequency components. Layers 2–4 capture object parts—eyes, wheels, windows. Layers 5–8 capture whole objects and their rough spatial arrangements. Layers 9–12 capture class-discriminative features that align with ImageNet category labels. This progression is not just philosophically interesting—it tells interpretability researchers where to look for the circuit that computes a given visual property.</p>
+      <p><strong>Typical output:</strong> Probing accuracy at layer 1: ~15% (near random for many classes). Layer 4: ~40%. Layer 8: ~65%. Layer 12: ~78% (matching full-model performance, as expected). The accuracy curve is roughly logistic—slow early gains, rapid middle-layer growth, diminishing returns in the final layers.</p>
+      <p><strong>Cautious interpretation:</strong> Linear probe accuracy measures what can be decoded from the representation with a linear classifier—it does not directly measure what the transformer uses. A representation could encode class identity linearly (high probe accuracy) without the model's downstream computation actually using that encoding for classification. This is the distinction between "the information is present" and "the information is causally used." Causal intervention experiments (ablation, activation patching) are needed to confirm that the linearly encoded information is actually used.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Speech: Whisper Encoder Layer Specialisation</h3>
+      <p><strong>What is measured:</strong> Linear probing accuracy for acoustic, phonological, and linguistic features at each encoder layer of OpenAI's Whisper model. Features probed include: voiced/unvoiced distinction (acoustic), phoneme identity (phonological), and word frequency/semantic category (linguistic). Whisper-base has 6 encoder layers; Whisper-large has 24.</p>
+      <p><strong>Why it matters:</strong> Whisper processes audio through a CNN frontend (producing frame-level acoustic features) and then through a transformer encoder. The question of where the model transitions from acoustic representations (capturing sound properties) to linguistic representations (capturing phonemes, words, syntax) is directly analogous to the syntactic-to-semantic transition in text models. For Whisper-base: layer 2 shows peak probe accuracy for voiced/unvoiced distinction; layer 4 shows peak phoneme identity accuracy; layer 6 (the final layer) shows highest accuracy for word-level and semantic features. For Whisper-large-v2, these transitions are more gradual and occur at proportionally deeper layers.</p>
+      <p><strong>Typical output:</strong> In Whisper-base, phoneme identity probe accuracy peaks around layer 4 at approximately 73% (random baseline ~1% for 40 phones). Word-level features probe more accurately at layer 6 than layer 4, confirming bottom-up specialisation from acoustic to linguistic. The CTC output from wav2vec2 (which differs from Whisper's architecture) shows different layer profiles because its pre-training objective explicitly aligns acoustic frames with character labels.</p>
+      <p><strong>Cautious interpretation:</strong> Layer specialisation in speech models depends heavily on the training objective. Whisper is trained for audio-to-text transcription with cross-entropy loss, which encourages linguistic feature extraction. Models trained with contrastive objectives (wav2vec2) or with reconstruction objectives (masked acoustic modelling) show different layer specialisation profiles. Do not assume that layer specialisation findings from one model architecture generalise to others without validation.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ EXERCISE -->
+    <section id="exercise" class="lesson-section">
+      <h2>Hands-on Exercise</h2>
+      <div class="exercise-box">
+        <h3>Exercise: Residual Stream Norm Profile Analysis</h3>
+        <p><strong>Task:</strong> For several sentences of different types (factual, syntactic, ambiguous), extract hidden states from all GPT-2 layers, compute the L2 norm of the last token's residual stream at each layer, and visualise how the norm profile differs across sentence types.</p>
+        <ol class="step-list">
+          <li class="step-item">
+            <span class="step-pill">01</span>
+            <span class="step-text"><strong>Load model:</strong> Load GPT2Model and GPT2Tokenizer. Run in eval mode with torch.no_grad() for efficiency.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">02</span>
+            <span class="step-text"><strong>Prepare sentences:</strong> Use three sentence types: (a) factual: "The capital of Japan is"; (b) syntactic: "The cat sat on the"; (c) random: "Purple elephants often dance because". These probe different types of computation.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">03</span>
+            <span class="step-text"><strong>Extract hidden states:</strong> For each sentence, run the model with <code style="font-family:var(--mono)">output_hidden_states=True</code> and collect the tuple of 13 tensors. Index <code style="font-family:var(--mono)">[0, -1, :]</code> to get the last-token vector at each layer.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">04</span>
+            <span class="step-text"><strong>Compute norms:</strong> For each layer and each sentence, compute <code style="font-family:var(--mono)">h.norm().item()</code>. Store in a (3 sentences × 13 layers) array.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">05</span>
+            <span class="step-text"><strong>Compute layer contributions:</strong> The "delta" at each layer is <code style="font-family:var(--mono)">norms[l] - norms[l-1]</code>. This measures how much each layer added to the residual stream for each sentence type.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">06</span>
+            <span class="step-text"><strong>Visualise:</strong> Plot two graphs: (a) norm vs. layer depth, with one line per sentence type; (b) delta (layer contribution) vs. layer depth. Add vertical lines at layers 4 and 8 to mark the syntactic/semantic boundary hypothesis.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">07</span>
+            <span class="step-text"><strong>Repeat:</strong> Run the same analysis for 5 different factual prompts (Paris, Berlin, Tokyo, Moscow, Rome as capitals) and average the norm profiles. Does the factual profile have a consistent "spike layer"?</span>
+          </li>
+        </ol>
+        <p><strong>Expected outputs:</strong> Norm should increase roughly monotonically for all sentence types. Factual sentences may show larger delta spikes at layers 9–12 compared to syntactic sentences. Syntactic sentences may show larger early-layer deltas. The random sentence may show lower overall norms as it requires less specific knowledge retrieval.</p>
+        <p><strong>Success criteria:</strong> You should be able to identify at least one layer where factual sentences show a markedly different norm delta than syntactic sentences. You should be able to plot a clear norm-vs-depth curve for all three sentence types on the same axes.</p>
+        <p><strong>Reflection questions:</strong> What does it mean if one layer has a dramatically larger norm increase than others? Is high norm delta always "important computation," or could it reflect noise amplification? Why might the first token position (position 0) show a different norm profile than the last token position?</p>
+        <p><strong>Stretch goal:</strong> Compute the "layer contribution" to the "Paris" direction specifically: at each layer, compute logit_diff_l = (W_U × h_l)[" Paris"] − mean(W_U × h_l). Plot this logit contribution by layer, decomposed into attention delta and MLP delta. This requires running separate forward passes with ablated attention or MLP components, or using a library like TransformerLens that makes this tractable.</p>
+        <div class="callout callout-rose">
+          <div class="callout-label">Uncertainty Note</div>
+          <p>Norm profiles are aggregate statistics that compress the full geometry of the residual stream into a single number per layer. Two layers with identical norm deltas can be doing completely different things: one might be adding a targeted direction toward the correct answer; another might be adding noise that will be cancelled by later layers. Norm analysis is a useful first look, not a complete mechanistic story. Always follow up norm findings with direction-specific analyses (logit lens, direct logit attribution) before drawing causal conclusions.</p>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ ARTIFACT -->
+    <section id="artifact" class="lesson-section">
+      <h2>Real Model Artifact</h2>
+      <p>GPT-2-small's architecture is one of the most extensively studied model configurations in mechanistic interpretability. Its parameters: 12 layers, 12 attention heads per layer, hidden dimension d = 768, MLP intermediate dimension d_mlp = 3,072 (4× expansion), maximum sequence length 1,024 tokens. Each transformer layer contributes approximately 7 million parameters: 2.36M for the three Q/K/V projection matrices (3 × 768 × 64 heads = 3 × 768 × 768), 0.59M for the output projection (768 × 768), and 4.72M for the two MLP weight matrices (768 × 3072 + 3072 × 768). Total: 117M parameters across all components.</p>
+      <p>The residual stream at each token position is 768-dimensional—exactly 768 "channels" of information per token. This is the fundamental information bottleneck of the model: no matter how many layers process a token, all the information about that token's context, identity, and predicted next token must ultimately fit into 768 real numbers at the final layer. The 768-dimensional residual stream is simultaneously the model's working memory, its knowledge retrieval space, and its computation surface.</p>
+      <p>An interpretability milestone from Elhage et al. (2021) demonstrates the residual stream decomposition empirically on GPT-2: the contribution of each attention layer and MLP layer to the final logit for the correct next token can be computed exactly using the residual decomposition theorem. For a typical factual completion, the correct token's logit is often dominated by 2–3 attention heads and 1–2 MLP layers, with the majority of other components making near-zero contributions. This extreme sparsity of causal attribution—a few components doing most of the work—is one of the central empirical findings that makes circuit-level mechanistic interpretability viable.</p>
+      <div class="callout callout-green">
+        <div class="callout-label">Parameter Accounting</div>
+        <p>GPT-2-small layer breakdown: 12 layers × (attention: 2.36M + output proj: 0.59M + MLP: 4.72M + LayerNorm: 0.003M) ≈ 12 × 7.1M = 85.3M parameters in transformer layers. Plus 38.6M embedding + 0.79M positional = 124.7M total (the slight discrepancy from the commonly cited 117M reflects different counting conventions for tied weights). Each attention layer alone contains roughly 2.95M parameters across its Q, K, V, and O projection matrices.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ ASSESSMENT -->
+    <section id="assessment" class="lesson-section">
+      <h2>Assessment Check</h2>
+      <div class="assessment-box">
+        <h3>Scenario 1: Layer Ablation and Factual Recall</h3>
+        <p><strong>Scenario:</strong> You run an experiment by zeroing out (ablating) the residual stream contributions of layers 9–12 of GPT-2 on a factual QA benchmark. You find that factual recall drops by 65% but grammaticality (measured by perplexity on grammatical vs. ungrammatical sentences) drops by only 5%. A colleague concludes: "This proves that layers 9–12 store factual knowledge and layers 1–8 handle grammar."</p>
+        <p><strong>Question:</strong> Is this conclusion correct? What alternative explanations should be considered? How would you design a more rigorous experiment?</p>
+        <p><strong>What a strong answer demonstrates:</strong> The strong answer identifies that the conclusion is partially supported but oversimplified. Layers 9–12 clearly contribute more to factual recall than to grammaticality, which is consistent with the layer specialisation hypothesis. However, "zeroing out the residual stream contribution" (setting Δ_attn_l = 0 and Δ_mlp_l = 0 for l = 9, 10, 11, 12) does not isolate what those layers store—it measures what they contribute on top of layers 1–8. Layers 1–8 may already encode some factual information that becomes accessible only when layers 9–12 further process it. A better experiment would use activation patching: run the model on a counterfactual input (e.g., "The Eiffel Tower is in London") and patch the activations of specific layers back to the original (correct) input. This isolates causal contributions more cleanly. Additionally, comparing the effect of ablating individual MLP layers within 9–12 versus individual attention layers can help separate "knowledge storage" (MLP) from "knowledge routing" (attention).</p>
+      </div>
+      <div class="assessment-box">
+        <h3>Scenario 2: Pre-Norm vs Post-Norm for Interpretability</h3>
+        <p><strong>Scenario:</strong> A team is building a new transformer from scratch and debating whether to use pre-norm (LayerNorm before attention) or post-norm (LayerNorm after attention + residual). They ask you: "Does the choice matter for mechanistic interpretability?"</p>
+        <p><strong>Question:</strong> How does the choice of norm placement affect the interpretability of the residual stream? Which is preferable for mechanistic interpretability work, and why?</p>
+        <p><strong>What a strong answer demonstrates:</strong> The strong answer explains the fundamental difference: in pre-norm, the residual stream x_l passes to the next layer unchanged except for the addition of Δ_attn and Δ_mlp. The LayerNorm is applied inside the attention and MLP sublayers, normalising their inputs but not the residual stream itself. This means the residual decomposition x_L = x_0 + Σ Δ_attn + Σ Δ_mlp holds cleanly—each term is a raw, unscaled addition to the stream. In post-norm, LayerNorm is applied after adding the attention output to the residual. This normalises the stream at every step, coupling the scale of the attention output to the current residual stream magnitude—making the decomposition non-trivially coupled across layers. Pre-norm is strongly preferred for interpretability because: (1) the residual stream magnitude has consistent meaning across layers; (2) the residual decomposition is clean and exact; (3) direct logit attribution can be computed without accounting for cross-layer normalisation interactions. Post-norm, while historically important and still used in some encoders, introduces complexity in attribution that interpretability tools have not fully resolved.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ REFERENCES -->
+    <section id="references" class="lesson-section">
+      <h2>References</h2>
+      <ul class="ref-list">
+        <li>Vaswani, A., Shazeer, N., Parmar, N., et al. (2017). Attention is all you need. <em>NeurIPS 2017</em>. arXiv:1706.03762 — Introduces the transformer architecture with post-norm.</li>
+        <li>Radford, A., Wu, J., Child, R., Luan, D., Amodei, D., & Sutskever, I. (2019). Language models are unsupervised multitask learners. <em>OpenAI Blog</em> — GPT-2, pre-norm architecture.</li>
+        <li>Elhage, N., Nanda, N., Olsson, C., et al. (2021). A mathematical framework for transformer circuits. <em>Transformer Circuits Thread</em> — Residual stream decomposition, direct logit attribution.</li>
+        <li>Zhang, B., & Sennrich, R. (2019). Root mean square layer normalization. <em>NeurIPS 2019</em>. arXiv:1910.07467 — Introduces RMSNorm.</li>
+        <li>Nostalgebraist (2020). Interpreting GPT: the logit lens. <em>LessWrong blog</em> — First public description of the logit lens technique.</li>
+        <li>Geva, M., Schuster, R., Berant, J., & Levy, O. (2021). Transformer feed-forward layers are key-value memories. <em>EMNLP 2021</em>. arXiv:2012.14913 — MLP as factual memory store.</li>
+        <li>Raghu, M., Unterthiner, T., Kornblith, S., Zhang, C., & Dosovitskiy, A. (2021). Do vision transformers see like convolutional neural networks? <em>NeurIPS 2021</em>. arXiv:2108.08810 — Layer specialisation in ViT.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ NEXT -->
+    <section id="next" class="lesson-section">
+      <h2>Next Step</h2>
+      <p>You have built a comprehensive understanding of transformer layers: the residual stream as a shared, accumulative communication bus; the exact additive decomposition of the final representation into contributions from every attention and MLP sublayer; and the layer specialisation that emerges from training. You have also seen how to extract hidden states programmatically and use norm profiles as a first-pass analysis tool.</p>
+      <p>The final lesson in Track 1 takes the residual stream all the way to the model's output: the prediction layer. You will learn how the unembedding matrix W_U converts the final residual stream into a probability distribution over tokens, how the logit lens technique makes this applicable at every layer, and how direct logit attribution lets you decompose the model's confidence in a specific prediction into contributions from every circuit component. This completes the full computational circuit from raw text to predicted token, and sets up everything in Track 2: Attention Mechanics.</p>
+      <a href="prediction.html" class="next-btn">Next: Prediction →</a>
+    </section>
+  </main>
+</div>
+<footer style="background:var(--ink);color:var(--cream);padding:3rem 2rem;margin-top:6rem;text-align:center;">
+  <p style="font-family:var(--mono);font-size:0.72rem;letter-spacing:0.1em;opacity:0.5;">MECHANISTIC INTERPRETABILITY ATLAS · TRACK 1: FOUNDATIONS</p>
+</footer>
+<script>
+const sections = document.querySelectorAll('.lesson-section');
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.remove('active'));
+      const active = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
