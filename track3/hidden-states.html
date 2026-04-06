@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hidden States — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,600&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../index.html">Home</a></li>
+      <li><a href="../index.html#tracks">Tracks</a></li>
+      <li><a href="../index.html#about">About</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">In This Lesson</span>
+    <ul class="sidebar-nav">
+      <li><a href="#metadata">Metadata</a></li>
+      <li><a href="#outcomes">Learning Outcomes</a></li>
+      <li><a href="#setup">Conceptual Setup</a></li>
+      <li><a href="#intuition">Intuition First</a></li>
+      <li><a href="#technical">Technical Core</a></li>
+      <li><a href="#worked-example">Worked Example</a></li>
+      <li><a href="#mechint">Mech. Interpretation</a></li>
+      <li><a href="#exercise">Hands-on Exercise</a></li>
+      <li><a href="#artifact">Real Model Artifact</a></li>
+      <li><a href="#assessment">Assessment Check</a></li>
+      <li><a href="#references">References</a></li>
+      <li><a href="#next">Next Step</a></li>
+    </ul>
+  </aside>
+
+  <main class="lesson-content">
+
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span>›</span>
+      <a href="../index.html#tracks">Track 3: Interpretability</a>
+      <span>›</span>
+      Hidden States
+    </div>
+
+    <!-- METADATA -->
+    <section id="metadata" class="lesson-section">
+      <h2>Hidden States</h2>
+      <p style="font-family:var(--mono);font-size:0.8rem;color:#8a8680;margin-bottom:1.5rem;">Lesson 1 of 4 · Track 3: Interpretability</p>
+      <div class="meta-box">
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Track</div>
+          <div style="font-weight:400;">Track 3: Interpretability</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Lesson</div>
+          <div style="font-weight:400;">#1 of 4</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Prerequisites</div>
+          <div style="font-weight:400;">Track 2: Generation Mechanics</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Est. Time</div>
+          <div style="font-weight:400;">55 minutes</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Modalities</div>
+          <div style="font-weight:400;">Text · Vision · Speech</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OUTCOMES -->
+    <section id="outcomes" class="lesson-section">
+      <h2>Learning Outcomes</h2>
+      <p>This lesson builds a precise understanding of the residual stream — the central data structure of mechanistic interpretability. You will leave able to extract, visualise, and reason about hidden states across transformer layers, and understand the anisotropy problem that complicates naive similarity comparisons.</p>
+      <ul class="outcomes-list">
+        <li>Define the hidden state tensor shape (L+1) × T × d and explain what each dimension represents.</li>
+        <li>State the residual stream decomposition: h_L = h_0 + Σ δ_attn_l + Σ δ_mlp_l, and explain its significance for linear attribution.</li>
+        <li>Extract hidden states from GPT-2 using <code>output_hidden_states=True</code> and forward hooks.</li>
+        <li>Explain the anisotropy problem: why raw cosine similarity between hidden states is spuriously high, and how to correct for it.</li>
+        <li>Describe how hidden state norms evolve across layers and what a sudden norm jump may indicate.</li>
+        <li>Apply the logit lens to read off token predictions from intermediate hidden states.</li>
+      </ul>
+    </section>
+
+    <!-- SETUP -->
+    <section id="setup" class="lesson-section">
+      <h2>Conceptual Setup</h2>
+      <p>Hidden states are the residual stream vectors at each transformer layer for each token position. For a model with L layers, sequence length T, and hidden dimension d, the full hidden state tensor has shape <strong>(L+1) × T × d</strong>. Each vector <code>h[l][t]</code> encodes everything the model "knows" about token t in context up to layer l.</p>
+      <p>This is the central data structure for mechanistic interpretability. Every attention head reads from it (via Q, K, V projections) and writes back to it (via the output projection). Every MLP reads from it and writes back to it. The residual stream is the shared communication channel of the entire transformer.</p>
+      <div class="callout-rose">
+        <strong>The Residual Stream Decomposition</strong><br>
+        The final hidden state at position t is a linear sum of all contributions:<br>
+        <code>h_L[t] = h_0[t] + Σ_l(δ_attn_l[t]) + Σ_l(δ_mlp_l[t])</code><br>
+        where <code>h_0[t]</code> is the token + position embedding, and each δ term is the output of one attention or MLP sublayer. This linearity is what makes mechanistic interpretability tractable.
+      </div>
+      <p>This decomposition means we can treat each layer's contribution as an additive "vote" on the final representation. Positive contributions move the representation toward certain predictions; negative contributions suppress them. The residual stream accumulates all these votes across all layers.</p>
+      <p>The layer index runs from 0 (the raw embedding) to L (the final representation fed into the unembedding matrix). A 12-layer model like GPT-2-small has 13 hidden states per token position (layers 0 through 12).</p>
+    </section>
+
+    <!-- INTUITION -->
+    <section id="intuition" class="lesson-section">
+      <h2>Intuition First</h2>
+      <p>Think of hidden states as a photograph of the model's mind at each step of processing. The camera takes 13 photographs for every token (in GPT-2-small), one after each layer.</p>
+      <ul class="step-list">
+        <li><strong>Layer 0 photograph:</strong> Shows only the initial token + position embedding. The model knows what the token is and where it sits in the sequence — nothing more. Every token's photograph at this layer is context-independent.</li>
+        <li><strong>Layer 6 photograph:</strong> Captures local context — the token's role in its immediate phrase, whether it is a subject or object, its grammatical features. Context has been incorporated through six rounds of attention.</li>
+        <li><strong>Layer 12 photograph:</strong> Encodes the model's full prediction state — all contextual information the model has extracted, compressed into one vector, ready to be projected into vocabulary space via the unembedding matrix.</li>
+      </ul>
+      <div class="callout-amber">
+        <strong>The key insight:</strong> Because of the residual connection, any two photographs can be subtracted to isolate exactly what changed. The difference <code>h[6] - h[0]</code> is the sum of all attention and MLP contributions from layers 1 through 6. This makes attribution possible without approximation.
+      </div>
+      <p>This is analogous to how a chemist can subtract a blank reference measurement from an experimental measurement to isolate the signal of interest. The residual stream is the blank — everything after layer 0 is "signal added by the transformer."</p>
+    </section>
+
+    <!-- TECHNICAL -->
+    <section id="technical" class="lesson-section">
+      <h2>Technical Core</h2>
+
+      <h3>Accessing Hidden States</h3>
+      <p>The HuggingFace Transformers library exposes hidden states via the <code>output_hidden_states=True</code> flag. The returned tuple has L+1 elements, each a tensor of shape (batch, T, d):</p>
+      <pre class="code-block"><code>out = model(**inputs, output_hidden_states=True)
+# out.hidden_states: tuple of 13 tensors, each (batch, seq_len, 768)
+h_layer_6 = out.hidden_states[6]   # layer 6 hidden states
+h_final   = out.hidden_states[-1]  # final layer hidden states</code></pre>
+
+      <h3>The Residual Stream Decomposition</h3>
+      <pre class="ascii-diagram">Layer 0:  h[0][t] = embed(token_t) + pos_embed(t)
+             +
+Layer 1:  delta_attn_1[t] + delta_mlp_1[t]
+             +
+Layer 2:  delta_attn_2[t] + delta_mlp_2[t]
+             ...
+             +
+Layer 12: delta_attn_12[t] + delta_mlp_12[t]
+             =
+h[12][t] = final hidden state (before unembedding)</pre>
+
+      <h3>The Anisotropy Problem</h3>
+      <p>A critical practical issue: transformer hidden states are <strong>anisotropic</strong>. They all tend to point in similar directions — clustered in a narrow cone of the d-dimensional space. This makes raw cosine similarity between unrelated hidden states spuriously high, sometimes exceeding 0.85 even for semantically unrelated tokens.</p>
+      <div class="callout-teal">
+        <strong>Fix:</strong> Center the embeddings before computing cosine similarity. Subtract the mean hidden state vector computed over a large corpus. This restores approximate isotropy and makes cosine similarity meaningful.
+      </div>
+
+      <h3>Norm Evolution Across Layers</h3>
+      <p>The L2 norm of hidden states typically increases from ~1 at the embedding layer to ~10–30 at the final layer. A sudden large norm jump at a specific layer often indicates a "computation-heavy" layer that is performing significant information processing.</p>
+
+      <h3>Extraction Methods Compared</h3>
+      <table class="comparison-table">
+        <thead>
+          <tr><th>Method</th><th>What It Returns</th><th>Flexibility</th><th>Use Case</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>output_hidden_states=True</code></td><td>All layer residual stream states</td><td>Low — only residual stream</td><td>Standard layer-wise analysis</td></tr>
+          <tr><td>Forward hooks on transformer blocks</td><td>Any intermediate tensor</td><td>High — any module</td><td>Attention patterns, MLP activations</td></tr>
+          <tr><td>Forward hooks on attention heads</td><td>Per-head output vectors</td><td>Very high</td><td>Head-level attribution</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Information Present at Different Layers</h3>
+      <table class="comparison-table">
+        <thead>
+          <tr><th>Layer</th><th>Information Present</th><th>Encoding Stage</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Layer 0</td><td>Token identity + absolute position only. No context.</td><td>Static embedding</td></tr>
+          <tr><td>Layer 6 (mid)</td><td>Local syntactic context, grammatical role, POS. Some semantic blending.</td><td>Syntactic processing</td></tr>
+          <tr><td>Layer 12 (final)</td><td>Full contextual representation, prediction state, factual associations.</td><td>Semantic/prediction</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- WORKED EXAMPLE -->
+    <section id="worked-example" class="lesson-section">
+      <h2>Worked Example</h2>
+      <p>Extract and compare final-layer hidden states for four sentences — three capital-city sentences and one unrelated sentence. Semantically related sentences should cluster in the hidden state space.</p>
+      <pre class="code-block"><code>import torch
+from transformers import GPT2Model, GPT2Tokenizer
+
+model = GPT2Model.from_pretrained("gpt2")
+tok = GPT2Tokenizer.from_pretrained("gpt2")
+model.eval()
+
+sentences = [
+    "Paris is the capital of France",
+    "Berlin is the capital of Germany",
+    "Tokyo is the capital of Japan",
+    "The sky is blue and the grass is green"
+]
+
+all_hidden = []
+for sent in sentences:
+    ids = tok(sent, return_tensors="pt")
+    with torch.no_grad():
+        out = model(**ids, output_hidden_states=True)
+    # Take last-token, last-layer hidden state
+    h = out.hidden_states[-1][0, -1, :]  # shape: (768,)
+    all_hidden.append(h)
+
+# Compare cosine similarities
+from torch.nn.functional import cosine_similarity
+for i, s1 in enumerate(sentences):
+    for j, s2 in enumerate(sentences[i+1:], i+1):
+        sim = cosine_similarity(
+            all_hidden[i].unsqueeze(0),
+            all_hidden[j].unsqueeze(0)
+        ).item()
+        print(f"Sim({i},{j}): {sim:.3f}  |  '{s1[:25]}' vs '{s2[:25]}'")
+
+# Expected output:
+# Sim(0,1): ~0.92  — capital sentences cluster together
+# Sim(0,2): ~0.91
+# Sim(1,2): ~0.93
+# Sim(0,3): ~0.78  — sky sentence is less similar
+# Sim(1,3): ~0.77
+# Sim(2,3): ~0.76
+# Note: all values are high due to anisotropy!
+
+# To correct for anisotropy, center the embeddings:
+mean_h = torch.stack(all_hidden).mean(0)
+centered = [h - mean_h for h in all_hidden]
+print("\\nCentered cosine similarities:")
+for i in range(len(sentences)):
+    for j in range(i+1, len(sentences)):
+        sim = cosine_similarity(
+            centered[i].unsqueeze(0),
+            centered[j].unsqueeze(0)
+        ).item()
+        print(f"Sim({i},{j}): {sim:.3f}")</code></pre>
+      <div class="callout-rose">
+        <strong>Key observation:</strong> Raw cosine similarities are all high (~0.75–0.95) due to anisotropy. After centering, the capital-city sentences will show much stronger similarity to each other relative to the sky sentence, revealing the genuine semantic structure.
+      </div>
+    </section>
+
+    <!-- MECHINT -->
+    <section id="mechint" class="lesson-section">
+      <h2>Mechanistic Interpretation Across Modalities</h2>
+
+      <h3>Text: Hidden State Clustering for Semantic Categories</h3>
+      <p>Extract last-layer hidden states for 100 words from 5 semantic categories (animals, cities, verbs, adjectives, numbers). Apply UMAP dimensionality reduction. Semantic categories should form visible clusters.</p>
+      <p><strong>What is measured:</strong> Pairwise cosine similarity between category members vs. across categories.</p>
+      <p><strong>Why it matters:</strong> Confirms the linear representation hypothesis — if categories cluster, their identity is linearly encoded along separable directions in hidden state space.</p>
+      <div class="callout-amber">
+        <strong>Caution:</strong> Anisotropy means raw cosine similarity is inflated. Always compare within-category similarity to a random baseline drawn from the same distribution. The effect should be significant above this baseline, not just high in absolute terms.
+      </div>
+
+      <h3>Vision: ViT Hidden States for Classification</h3>
+      <p>In a Vision Transformer (ViT), the [CLS] token aggregates global image information across self-attention layers. Extract the [CLS] token hidden state at each layer.</p>
+      <ul>
+        <li><strong>Layer 0:</strong> Contains patch-level features only — local texture and color statistics from individual image patches.</li>
+        <li><strong>Layer 6:</strong> Intermediate aggregation — parts of objects, spatial relationships between nearby patches.</li>
+        <li><strong>Layer 12:</strong> Class-discriminative information. Cosine similarity between same-class images peaks here.</li>
+      </ul>
+      <p><strong>What is measured:</strong> Cosine similarity between [CLS] hidden states of same-class images vs. different-class images, across layers.</p>
+      <div class="callout-teal">
+        <strong>Caution:</strong> ViT's CLS token aggregation is indirect — not all image information passes through CLS at every layer. Some layers may route information via patch tokens rather than CLS. Analysis of all token positions (not just CLS) is more complete.
+      </div>
+
+      <h3>Speech: wav2vec2 Hidden States for Speaker Identity</h3>
+      <p>Extract hidden states from an utterance and from a different utterance by the same speaker. Later-layer hidden states (layers 18–24 of wav2vec2-large) should be more similar across utterances by the same speaker than across different speakers — a form of speaker normalization.</p>
+      <p><strong>What is measured:</strong> Within-speaker vs. between-speaker cosine similarity of hidden states, broken down by layer.</p>
+      <div class="callout-violet">
+        <strong>Caution:</strong> This effect is influenced by the vocabulary of the utterance. Utterances about different topics may diverge in later layers even for the same speaker, because later layers encode linguistic content strongly. Test with phonetically matched utterances for clean results.
+      </div>
+    </section>
+
+    <!-- EXERCISE -->
+    <section id="exercise" class="lesson-section">
+      <h2>Hands-on Exercise</h2>
+      <div class="exercise-box">
+        <h3>Map the Hidden State Geometry Across Layers</h3>
+        <p><strong>Task:</strong> Trace how a target sentence's hidden state evolves through all 13 layers of GPT-2, measuring norm, cosine similarity to layer 0, and top predictions at each layer.</p>
+
+        <ol class="step-list">
+          <li>Load GPT-2 with <code>output_hidden_states=True</code>.</li>
+          <li>Run the sentence <em>"The Louvre museum is in Paris"</em> through the model.</li>
+          <li>Extract the last-token hidden state at each of the 13 layers.</li>
+          <li>Compute: (a) L2 norm of each hidden state; (b) cosine similarity to layer 0 hidden state; (c) top-3 predicted tokens via the logit lens (multiply by unembedding matrix W_U).</li>
+          <li>Plot norm and cosine similarity vs. layer index on the same figure.</li>
+          <li>Note which layer shows the biggest norm jump.</li>
+        </ol>
+
+        <p><strong>Expected output:</strong></p>
+        <ul>
+          <li>Norm increases from ~1 (layer 0) to ~15 (layer 12), not monotonically.</li>
+          <li>Cosine similarity to layer 0 decreases from 1.0 to approximately 0.2–0.4.</li>
+          <li>"Paris" should appear in the top-3 predicted tokens by approximately layer 9.</li>
+        </ul>
+
+        <p><strong>Reflection questions:</strong></p>
+        <ul>
+          <li>What does it mean if the norm increases dramatically at a specific layer? Could this indicate a "computation-heavy" layer that is adding significant new information?</li>
+          <li>At what layer does the cosine similarity to layer 0 drop most sharply? Is this the same layer with the biggest norm jump?</li>
+        </ul>
+
+        <div class="callout-green">
+          <strong>Stretch challenge:</strong> Compare the hidden state geometry for "The Louvre museum is in Paris" vs. a nonsense sentence of the same length, e.g., "The banana purple slowly sings about". Does the norm trajectory differ? Does the logit lens show coherent predictions for the nonsense sentence?
+        </div>
+      </div>
+    </section>
+
+    <!-- ARTIFACT -->
+    <section id="artifact" class="lesson-section">
+      <h2>Real Model Artifact</h2>
+      <div class="callout-rose">
+        <strong>GPT-2-small Hidden State Statistics (WebText Validation Set)</strong><br>
+        Mean L2 norm at final layer (layer 12): <strong>14.3</strong> (std 3.2)<br>
+        Residual stream dimension: <strong>768</strong><br>
+        Mean cosine similarity between random token pairs at layer 12: <strong>0.84</strong> (anisotropy)<br>
+        Mean cosine similarity after mean-centering: <strong>0.12</strong>
+      </div>
+      <p>Research by Elhage et al. (2021) shows that the residual stream of transformers can be decomposed into approximately orthogonal subspaces:</p>
+      <ul>
+        <li><strong>Syntax subspace:</strong> Dimensions that encode grammatical role (subject, object, modifier). These dimensions are most active in middle layers.</li>
+        <li><strong>Semantics subspace:</strong> Dimensions that encode meaning — entity type, sentiment, topicality. These dimensions grow throughout all layers.</li>
+      </ul>
+      <p>These subspaces are not perfectly orthogonal in practice — there is overlap, particularly for words where syntactic role and semantic content are correlated. Nevertheless, linear probes trained on these subspaces separately achieve near-ceiling performance on their respective tasks.</p>
+      <p>The finding that the residual stream has structured, separable subspaces is a key piece of evidence for the linear representation hypothesis: the transformer is not doing something mysterious and nonlinear in hidden space — it is operating on approximately linear subspaces that can be identified and interpreted.</p>
+    </section>
+
+    <!-- ASSESSMENT -->
+    <section id="assessment" class="lesson-section">
+      <h2>Assessment Check</h2>
+      <div class="assessment-box">
+        <h3>Scenario 1: Cosine Similarity of 0.15</h3>
+        <p>You compare hidden states at layer 12 for "Paris" in context vs. the raw embedding of "Paris" at layer 0. They have cosine similarity 0.15. Is this expected and what does it tell you?</p>
+        <details>
+          <summary>Show strong answer</summary>
+          <p><strong>Yes — this is expected and desirable.</strong> The final-layer hidden state has been transformed by 12 layers of attention and MLP operations that incorporate the full context. The initial embedding is context-free. A similarity of 0.15 indicates that token identity is still partially encoded (similarity &gt; 0) but context has dramatically transformed the representation.</p>
+          <p>A similarity close to 1.0 would suggest the transformer layers are doing very little useful processing. A similarity of exactly 0 would suggest the token identity is completely lost. 0.15 is a healthy value indicating significant contextual transformation while preserving a trace of token identity.</p>
+        </details>
+
+        <h3>Scenario 2: Average Similarity of 0.85</h3>
+        <p>A student computes pairwise cosine similarities between hidden states at layer 12 for 1000 random tokens and finds an average similarity of 0.85. They conclude that most tokens share 85% of their semantic content. What is wrong with this reasoning?</p>
+        <details>
+          <summary>Show strong answer</summary>
+          <p><strong>This is the anisotropy problem.</strong> Transformer hidden states cluster in a cone — they all point in roughly the same direction in the 768-dimensional space, making cosine similarity artificially high. An average similarity of 0.85 does not mean tokens share 85% of their content; it means the embedding space is anisotropic.</p>
+          <p><strong>The fix:</strong> Center the embeddings by subtracting the mean hidden state vector computed over a large corpus, then compute cosine similarity. After centering, average similarity for random token pairs typically drops to 0.1–0.15, which is a much more meaningful baseline. Alternatively, use a calibrated similarity metric that accounts for the distributional properties of the space.</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- REFERENCES -->
+    <section id="references" class="lesson-section">
+      <h2>References</h2>
+      <ul class="ref-list">
+        <li>Elhage, N., et al. (2021). <em>A Mathematical Framework for Transformer Circuits.</em> Transformer Circuits Thread. <a href="https://transformer-circuits.pub/2021/framework/index.html" target="_blank">transformer-circuits.pub</a></li>
+        <li>Ethayarajh, K. (2019). <em>How Contextual are Contextualized Word Representations? Comparing the Geometry of BERT, ELMo, and GPT-2 Embeddings.</em> EMNLP 2019.</li>
+        <li>Cai, X., et al. (2021). <em>Isotropy in the Contextual Embedding Space: Clusters and Manifolds.</em> ICLR 2021.</li>
+        <li>Dosovitskiy, A., et al. (2020). <em>An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale.</em> ICLR 2021.</li>
+        <li>Nostalgebraist (2020). <em>Interpreting GPT: the logit lens.</em> LessWrong.</li>
+      </ul>
+    </section>
+
+    <!-- NEXT -->
+    <section id="next" class="lesson-section">
+      <h2>Next Step</h2>
+      <p>Now that you can extract and reason about hidden states across all layers, the next lesson introduces <strong>layer probing</strong> — a systematic method for testing whether specific properties (POS tags, syntax depth, semantic categories) are linearly encoded in those states. Probing formalises the intuition from this lesson into a rigorous experimental framework.</p>
+      <a href="layer-probing.html" class="next-btn">Next: Layer Probing →</a>
+    </section>
+
+  </main>
+</div>
+
+<footer style="background:var(--ink);color:var(--cream);text-align:center;padding:2rem;font-family:var(--mono);font-size:0.75rem;margin-top:4rem;">
+  <p>MI Atlas · Track 3: Interpretability · <a href="../index.html" style="color:var(--rose-light);">Home</a></p>
+</footer>
+
+<script>
+  const sections = document.querySelectorAll('.lesson-section');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(link => {
+          link.classList.toggle('active', link.getAttribute('href') === '#' + entry.target.id);
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
