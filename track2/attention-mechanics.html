@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attention Mechanics — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,600&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../index.html">Home</a></li>
+      <li><a href="../index.html#tracks">Tracks</a></li>
+      <li><a href="../index.html#about">About</a></li>
+    </ul>
+  </div>
+</nav>
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">In This Lesson</span>
+    <ul class="sidebar-nav">
+      <li><a href="#metadata">Metadata</a></li>
+      <li><a href="#outcomes">Learning Outcomes</a></li>
+      <li><a href="#setup">Conceptual Setup</a></li>
+      <li><a href="#intuition">Intuition First</a></li>
+      <li><a href="#technical">Technical Core</a></li>
+      <li><a href="#worked-example">Worked Example</a></li>
+      <li><a href="#mechint">Mech. Interpretation</a></li>
+      <li><a href="#exercise">Hands-on Exercise</a></li>
+      <li><a href="#artifact">Real Model Artifact</a></li>
+      <li><a href="#assessment">Assessment Check</a></li>
+      <li><a href="#references">References</a></li>
+      <li><a href="#next">Next Step</a></li>
+    </ul>
+  </aside>
+  <main class="lesson-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span>›</span>
+      <a href="../index.html#tracks">Track 2: Architecture</a>
+      <span>›</span>
+      Attention Mechanics
+    </div>
+    <!-- ═══════════════════════════════════════════════════ METADATA -->
+    <section id="metadata" class="lesson-section">
+      <h2>Attention Mechanics</h2>
+      <p style="font-family:var(--mono);font-size:0.8rem;color:#8a8680;margin-bottom:1.5rem;">Lesson 1 of 3 · Track 2: Architecture</p>
+      <div class="meta-box">
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Track</div>
+          <div style="font-weight:400;">Track 2: Architecture</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Lesson</div>
+          <div style="font-weight:400;">#1 of 3</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Prerequisites</div>
+          <div style="font-weight:400;">Track 1: Foundations (all 4 lessons)</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Est. Time</div>
+          <div style="font-weight:400;">65 minutes</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Modalities</div>
+          <div style="font-weight:400;">Text · Vision · Speech</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Accent</div>
+          <div style="font-weight:400;color:var(--teal);">Teal — Architecture</div>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ OUTCOMES -->
+    <section id="outcomes" class="lesson-section">
+      <h2>Learning Outcomes</h2>
+      <p>This lesson opens Track 2 by dissecting the attention mechanism at both mathematical and mechanistic levels. You will move beyond "attention is all you need" slogans to understand exactly how QKV projections, softmax routing, and multi-head output projections interact — and why this architecture produces circuits that are analyzable.</p>
+      <ul class="outcomes-list">
+        <li>Derive the scaled dot-product attention formula from first principles and explain why the √d_k scaling factor is necessary.</li>
+        <li>Decompose each attention head into its QK circuit (which tokens attend to which) and OV circuit (what information is moved), and explain why this factorization matters for interpretability.</li>
+        <li>Explain what induction heads are, how to detect them via attention pattern inspection, and why they are considered a universal property of transformers.</li>
+        <li>Identify at least five named attention head types (induction, previous-token, name-mover, duplicate-suppression, attention sink) and describe the attention pattern signature of each.</li>
+        <li>Implement attention extraction in PyTorch using the Hugging Face API and visualize a head's attention matrix for a given input sequence.</li>
+        <li>Calculate attention entropy for a given head and interpret what low vs. high entropy implies about information routing.</li>
+        <li>Distinguish between attention pattern visualization (correlation) and activation patching (causal evidence) and explain when each is appropriate.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ SETUP -->
+    <section id="setup" class="lesson-section">
+      <h2>Conceptual Setup</h2>
+      <p>Attention is the mechanism by which transformer layers route information from one token position to another. Unlike convolution (local receptive field) or RNNs (sequential bottleneck), attention can in principle connect any two positions in a sequence with equal computational cost. This makes it both powerful and interpretable: the attention pattern is a 2D matrix — query position × key position — that can be visualized and analyzed directly.</p>
+      <p>For mechanistic interpretability, attention is central. Most circuits studied so far — including induction heads, name-mover heads, and inhibition heads — are defined in terms of attention pattern behavior. When a researcher says "head 4.4 implements induction," they are making a claim about which (query, key) pairs produce high attention weights and what values are moved as a result. Understanding attention mechanics is therefore the gateway to understanding circuits.</p>
+      <div class="callout callout-teal">
+        <span class="callout-label">Architecture Context</span>
+        <p>Attention is applied <em>between</em> positions (routing information) whereas MLP layers are applied <em>within</em> positions (transforming information at a fixed position). This division of labor is not just an architectural convenience — it is the reason circuits can be decomposed into attention-mediated information flow graphs.</p>
+      </div>
+      <p>A key point for new practitioners: the residual stream is the medium through which all attention heads and MLP layers communicate. Each attention head reads from the residual stream via its Q, K, V projections and writes back to the residual stream via its output projection W_O. The residual stream itself is never "replaced" — only deltas are added. This additive structure makes decomposition tractable: you can subtract a head's contribution from the residual stream to measure its causal role.</p>
+      <p>Historically, attention was introduced in sequence-to-sequence models as a soft alignment mechanism (Bahdanau et al. 2015). The transformer architecture (Vaswani et al. 2017) made attention the primary computational primitive, replacing recurrence entirely. The mechanistic interpretability research program began in earnest with Elhage et al. 2021's "Mathematical Framework for Transformer Circuits," which introduced the QK/OV circuit decomposition and showed that even two-layer transformers exhibit rich, analyzable structure.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ INTUITION -->
+    <section id="intuition" class="lesson-section">
+      <h2>Intuition First</h2>
+      <p>Imagine a room full of experts. Each expert (token) wants to ask questions of other experts. The <strong>query Q</strong> is the question that token i is asking. The <strong>key K</strong> is each expert's "I can answer that" signal. The <strong>value V</strong> is the actual information they provide if selected.</p>
+      <p>Attention computes: "How much should position i attend to position j?" The answer is a softmax over the dot products of Q_i with all K_j — think of this as asking: how similar is my question to each expert's advertised specialty? The result is a weighted average of values. Whoever has the most relevant specialty gets the highest weight in the answer.</p>
+      <div class="callout callout-amber">
+        <span class="callout-label">Key Intuition</span>
+        <p>The dot product Q·K measures "relevance" — but it is relevance in a learned embedding space, not human-legible similarity. Two tokens have high Q·K if the model has learned to associate those query directions with those key directions during training. The attention pattern is not following any pre-programmed rule; it is a consequence of weight learning.</p>
+      </div>
+      <p>Multi-head attention lets the model ask multiple different questions simultaneously. Head 1 might ask "what is the syntactic subject?" while head 2 asks "what is the most recently mentioned entity?" and head 3 asks "what token am I most similar to lexically?" Each head runs the QKV computation independently with its own learned projections, and their outputs are concatenated and projected back to the residual stream dimension.</p>
+      <p>The intuition for the <strong>causal mask</strong>: in an autoregressive model, each token can only attend to itself and earlier tokens, never to future tokens. This is enforced by setting the attention score for future positions to −∞ before the softmax, which makes those softmax outputs exactly zero. Without this mask, the model would "cheat" by reading future tokens during training.</p>
+      <p>The intuition for <strong>induction heads</strong>: if you repeat a sequence (A B C A B), the model should predict C after the second A. The induction head accomplishes this in two steps. First, a "previous-token head" at position A₂ attends back to the token that came after A₁ (which is B₁). This is only possible if a previous-token head has already written information about "what follows each token" into the residual stream. The composition of these two heads is what makes in-context learning possible.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ TECHNICAL -->
+    <section id="technical" class="lesson-section">
+      <h2>Technical Core</h2>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">The Attention Formula</h3>
+      <p>Scaled dot-product attention for a single head:</p>
+      <div class="ascii-diagram">Attention(Q, K, V) = softmax( QK<sup>T</sup> / √d_k ) · V
+  Q = x W_Q    where W_Q ∈ ℝ^{d × d_k}
+  K = x W_K    where W_K ∈ ℝ^{d × d_k}
+  V = x W_V    where W_V ∈ ℝ^{d × d_k}
+  Output: h = Attention(Q, K, V) · W_O    where W_O ∈ ℝ^{d_k × d}
+  Multi-head: MultiHead(x) = concat(h_1, ..., h_H) · W_O_full
+              W_O_full ∈ ℝ^{H·d_k × d}
+  GPT-2 small: d = 768, H = 12, d_k = 64 (per head)</div>
+      <p>The √d_k scaling prevents the dot products from growing too large as d_k increases, which would cause the softmax to saturate (outputs near 0 or 1, gradients near 0). With d_k = 64 in GPT-2-small, the scale factor is √64 = 8.</p>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">Information Flow Diagram</h3>
+      <div class="ascii-diagram">Position i                         Position j
+    │                                   │
+    │  Q = x_i · W_Q                    │  K = x_j · W_K
+    │  (768 → 64)                       │  (768 → 64)
+    │                                   │
+    └──────────── dot product ──────────┘
+                       │
+              score_ij = Q_i · K_j / √64
+                       │
+           softmax over all j (causal mask applied)
+                       │
+              α_ij  =  attention weight  ∈ [0, 1]
+                       │
+                       ↓ weight j's value by α_ij
+    V = x_j · W_V      →    α_ij · V_j
+    output_i = Σ_j  α_ij · (x_j · W_V)   then  · W_O
+               ↑____________________________↑
+               residual stream gets Δ = output_i added</div>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">QK and OV Circuit Decomposition</h3>
+      <p>Elhage et al. 2021 introduced a crucial decomposition: each attention head can be characterized by two circuits:</p>
+      <ul>
+        <li><strong>QK circuit:</strong> W_Q<sup>T</sup> W_K — determines <em>which tokens attend to which</em>. This is a d×d matrix (after folding the projections) that defines the "attention pattern." It is a function of the positions and token identities.</li>
+        <li><strong>OV circuit:</strong> W_V W_O — determines <em>what information is moved</em> when a token is attended to. This is also a d×d matrix and defines the "information mover" behavior of the head.</li>
+      </ul>
+      <div class="callout callout-teal">
+        <span class="callout-label">Why the Decomposition Matters</span>
+        <p>The QK and OV circuits are nearly independent: a head's attention pattern (QK) can be understood separately from what it does with that attention (OV). A head might have a clear pattern — attending to the previous token — but its OV circuit could copy the token's embedding directly, negate it, or project onto a specific feature direction. These two questions require separate analysis.</p>
+      </div>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">Named Attention Head Types</h3>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Head Type</th>
+            <th>Attention Pattern Signature</th>
+            <th>Function</th>
+            <th>Found In</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Induction head</td>
+            <td>Diagonal offset by k: attends from position t to t−k where AB…A→B</td>
+            <td>Implements in-context pattern completion</td>
+            <td>Layers 4–6 in GPT-2</td>
+          </tr>
+          <tr>
+            <td>Previous-token head</td>
+            <td>Strictly sub-diagonal: position t attends to t−1</td>
+            <td>Copies previous token information to current position</td>
+            <td>Early layers (1–3)</td>
+          </tr>
+          <tr>
+            <td>Name-mover head</td>
+            <td>Copies named entity to indirect object positions</td>
+            <td>Routes subject/object identity for IOI task</td>
+            <td>GPT-2 layers 9–10</td>
+          </tr>
+          <tr>
+            <td>Duplicate-suppression head</td>
+            <td>Attends to duplicate tokens; suppresses their output</td>
+            <td>Reduces repeated entity predictions</td>
+            <td>GPT-2 layer 10</td>
+          </tr>
+          <tr>
+            <td>Backup name-mover</td>
+            <td>Similar to name-mover, activates when primary is suppressed</td>
+            <td>Redundancy for IOI circuit</td>
+            <td>GPT-2 layer 11</td>
+          </tr>
+          <tr>
+            <td>Attention sink</td>
+            <td>Uniform attention to position 0 ([BOS]) regardless of input</td>
+            <td>No-op: parks attention when no useful signal exists</td>
+            <td>Present in virtually all layers</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">Attention Entropy</h3>
+      <p>The entropy of an attention distribution measures how focused vs. diffuse a head is:</p>
+      <div class="ascii-diagram">H(α_i) = − Σ_j  α_ij · log(α_ij)
+  Minimum: H = 0      (attend to exactly one token: α_ij = 1 for one j)
+  Maximum: H = log(T) (uniform distribution over T tokens)
+  Normalized entropy: H / log(T) ∈ [0, 1]
+  Interpretation:
+    H ≈ 0:        highly focused head — copies from one source
+    H ≈ 0.5:      moderately selective
+    H ≈ log(T):   attention sink or diffuse/uninformative head</div>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">Low-Rank Structure and Superposition</h3>
+      <p>W_Q and W_K are each d × d_k = 768 × 64, meaning they project the 768-dimensional residual stream into a 64-dimensional space. This rank-64 bottleneck is intentional: it constrains the head to compute attention based on a 64-dimensional "subspace" of the full representation. The effective QK circuit W_Q<sup>T</sup>W_K is therefore a rank-64 matrix, even though it operates on 768-dimensional vectors. This low-rank structure means each head specializes on a limited set of features — it cannot attend to all possible token properties simultaneously.</p>
+      <div class="callout callout-violet">
+        <span class="callout-label">Caution: Attention ≠ Causality</span>
+        <p>High attention weight from token i to token j does not mean j causes i's prediction. Attention weights are softmax outputs — they always sum to 1. A head can show "high attention to Paris" while the OV circuit for that head performs near-zero transformation (a near-zero W_V W_O product). Always check the OV circuit magnitude, not just the attention pattern.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ WORKED EXAMPLE -->
+    <section id="worked-example" class="lesson-section">
+      <h2>Worked Example</h2>
+      <p>We extract attention weights from GPT-2 and demonstrate an induction-like behavior on a repeated-token sequence. Layer 5, head 1 is a known induction head in GPT-2.</p>
+      <ol class="step-list">
+        <li class="step-item">
+          <span class="step-pill">01</span>
+          <span class="step-text">Load GPT2Model (not LMHead — we only need hidden states and attention). Set <code>output_attentions=True</code> in the forward call.</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">02</span>
+          <span class="step-text">Run on the sentence "The cat sat on the mat. The cat" — this contains a repeated bigram "The cat". The induction head should make the final "cat" attend back to the first "cat."</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">03</span>
+          <span class="step-text">Extract <code>outputs.attentions[5][0, 1]</code> — layer index 5, batch index 0, head index 1. This yields a (T, T) attention matrix.</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">04</span>
+          <span class="step-text">Print the attention from the last token position ("cat") to all previous tokens. The induction head should show peak attention at the first "cat" token position.</span>
+        </li>
+      </ol>
+      <pre class="code-block"><span class="kw">import</span> torch
+<span class="kw">from</span> transformers <span class="kw">import</span> GPT2Model, GPT2Tokenizer
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+model = GPT2Model.from_pretrained(<span class="st">"gpt2"</span>)
+tok = GPT2Tokenizer.from_pretrained(<span class="st">"gpt2"</span>)
+model.eval()
+<span class="cm"># Induction head demo: AB...A → B pattern</span>
+text = <span class="st">"The cat sat on the mat. The cat"</span>
+inputs = tok(text, return_tensors=<span class="st">"pt"</span>)
+<span class="kw">with</span> torch.no_grad():
+    outputs = model(**inputs, output_attentions=<span class="nu">True</span>)
+<span class="cm"># outputs.attentions: tuple of 12 tensors, each (1, 12, T, T)</span>
+attentions = outputs.attentions
+T = inputs[<span class="st">"input_ids"</span>].shape[<span class="nu">1</span>]
+<span class="cm"># Layer 5, head 1 — canonical induction head in GPT-2</span>
+attn = attentions[<span class="nu">5</span>][<span class="nu">0</span>, <span class="nu">1</span>].numpy()  <span class="cm"># (T, T)</span>
+tokens = tok.convert_ids_to_tokens(inputs[<span class="st">"input_ids"</span>][<span class="nu">0</span>])
+<span class="fn">print</span>(<span class="st">f"Tokens: {tokens}"</span>)
+<span class="fn">print</span>(<span class="st">f"\nAttention from last 'cat' (pos {T-1}) to all positions:"</span>)
+<span class="kw">for</span> i, (t, a) <span class="kw">in</span> enumerate(zip(tokens, attn[-<span class="nu">1</span>])):
+    bar = <span class="st">"█"</span> * int(a * <span class="nu">40</span>)
+    <span class="fn">print</span>(<span class="fn">f</span><span class="st">"  [{i:2d}] {t:15s}: {a:.3f}  {bar}"</span>)
+<span class="cm"># Visualize full attention matrix for head 5.1</span>
+fig, ax = plt.subplots(figsize=(<span class="nu">8</span>, <span class="nu">7</span>))
+im = ax.imshow(attn, cmap=<span class="st">"Blues"</span>, aspect=<span class="st">"auto"</span>)
+ax.set_xticks(range(T))
+ax.set_yticks(range(T))
+ax.set_xticklabels(tokens, rotation=<span class="nu">90</span>, fontsize=<span class="nu">8</span>)
+ax.set_yticklabels(tokens, fontsize=<span class="nu">8</span>)
+ax.set_title(<span class="st">"GPT-2 Layer 5, Head 1 — Induction Head Pattern"</span>)
+plt.colorbar(im)
+plt.tight_layout()
+plt.savefig(<span class="st">"induction_head_attn.png"</span>, dpi=<span class="nu">150</span>)
+<span class="cm"># Compute attention entropy for each head in layer 5</span>
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="fn">print</span>(<span class="st">"\nAttention entropy for each head in layer 5:"</span>)
+<span class="kw">for</span> h <span class="kw">in</span> range(<span class="nu">12</span>):
+    a_h = attentions[<span class="nu">5</span>][<span class="nu">0</span>, h].numpy()  <span class="cm"># (T, T)</span>
+    <span class="cm"># Mean entropy across all query positions</span>
+    eps = <span class="nu">1e-10</span>
+    entropy = -np.sum(a_h * np.log(a_h + eps), axis=-<span class="nu">1</span>).mean()
+    <span class="fn">print</span>(<span class="fn">f</span><span class="st">"  Head {h:2d}: mean entropy = {entropy:.3f}"</span>)
+<span class="cm"># Expected: head 1 should have LOW entropy (focused induction pattern)
+# Attention sink heads should have very low entropy (all weight on pos 0)
+# Diffuse heads should have high entropy (uniform-ish distribution)</span></pre>
+      <p>Typical output for the last "cat" token: attention weight at the first "cat" position (index ~1) should be ≥ 0.4, substantially higher than any other position. This is the induction head "match" — the head has learned to attend from A₂ back to A₁ when both are the same token. The previous-token head (typically head 0 in early layers) would show a strictly sub-diagonal pattern: token at position t attending to t−1.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ MECHINT -->
+    <section id="mechint" class="lesson-section">
+      <h2>Mechanistic Interpretation Layer</h2>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Text: Induction Heads and In-Context Learning</h3>
+      <p><strong>What is measured:</strong> Attention pattern from token at position 2k to token at position k, when the input is a repeated sequence A B C … A B C. The induction head (typically layer 4–6 in GPT-2) should show high attention from the second occurrence of each token back to its first occurrence.</p>
+      <p><strong>Why it matters:</strong> Induction heads are universal — found in all transformers studied so far — and they implement a fundamental in-context learning capability. When a model sees a new pattern in its context (e.g., "Tokyo → Japan, Paris → France, Berlin → ___"), induction heads enable it to complete the pattern without any weight update. This is one of the clearest mechanistic explanations for few-shot in-context learning.</p>
+      <p><strong>Typical experiment:</strong> Run GPT-2 on the string "A B C D E A B C D E" (repeated alphabet prefix). Measure the attention at layer 5, head 1 from each position in the second half to the corresponding position in the first half. Scores above 0.3 are indicative of induction behavior.</p>
+      <p><strong>Caution:</strong> Identifying "induction heads" by attention pattern alone is not sufficient — always confirm with activation patching that they causally contribute to the induction behavior. A head can look like an induction head while its OV circuit does nothing useful. Also: the two-head composition (previous-token head + induction head) must be present simultaneously for true induction. Testing one head in isolation misses the composition.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Vision: ViT Attention Head Specialization</h3>
+      <p><strong>What is measured:</strong> Attention entropy and attention pattern structure for each head in a Vision Transformer (ViT-B/16). The input is a 224×224 image divided into 196 patches (16×16 each), plus one [CLS] token. Each head produces a 197×197 attention matrix.</p>
+      <p><strong>Key findings from research:</strong></p>
+      <ul>
+        <li><strong>[CLS] token attention (late layers):</strong> In layers 9–12, the [CLS] token attends strongly to semantically relevant patches — foreground objects, diagnostic regions. This is the mechanism by which class-relevant information is aggregated for classification.</li>
+        <li><strong>Local heads (early layers):</strong> In layers 1–4, many heads attend primarily to spatially nearby patches. These resemble convolutional receptive fields and capture low-level features.</li>
+        <li><strong>Global heads (mid layers):</strong> Some heads attend nearly uniformly across all patches — essentially computing a global average of patch features.</li>
+      </ul>
+      <p><strong>Caution:</strong> Averaging attention across heads or layers destroys per-head specialization information and produces a misleading "average saliency map." Never report only the mean; report per-head patterns.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Speech: Whisper Cross-Attention Alignment</h3>
+      <p><strong>What is measured:</strong> Cross-attention weights between decoder tokens and encoder audio frames in Whisper. For each decoder step (generating one text token), the cross-attention head produces a distribution over audio frames — a soft alignment between transcribed text and spoken audio.</p>
+      <p><strong>Why it matters:</strong> Whisper's cross-attention creates an implicit forced alignment without being explicitly trained on alignment data. The decoder token for "Paris" attends to the audio frames corresponding to the spoken word "Paris." This reveals how the model aligns audio and text at the mechanistic level — without any Viterbi decoding or HMM.</p>
+      <p><strong>What to measure:</strong> For a given transcription, extract cross-attention weights from several heads in Whisper's decoder. Plot as a heatmap (x-axis: audio frames, y-axis: text tokens). A diagonal structure indicates clean alignment; jumps indicate speech disfluencies or model errors.</p>
+      <p><strong>Caution:</strong> Cross-attention alignment in Whisper is learned and imperfect, especially for non-native speech, heavy accents, or code-switched utterances. It is not equivalent to forced alignment from a speech-dedicated aligner (like Montreal Forced Aligner). Also, different heads may implement different alignment strategies — some may be noisy or task-irrelevant.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ EXERCISE -->
+    <section id="exercise" class="lesson-section">
+      <h2>Hands-on Exercise</h2>
+      <div class="exercise-box">
+        <h3>Exercise: Visualize and Classify Attention Heads in GPT-2</h3>
+        <p><strong>Task:</strong> For GPT-2, visualize attention patterns from layer 4 and classify the behavior of all 12 heads in that layer.</p>
+        <ol class="step-list">
+          <li class="step-item">
+            <span class="step-pill">01</span>
+            <span class="step-text"><strong>Load:</strong> Load GPT2Model with <code>output_attentions=True</code>. Run on the sentence "Mary gave John a book and he read it carefully." Tokenize and verify you have 10–12 tokens.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">02</span>
+            <span class="step-text"><strong>Extract:</strong> Get <code>outputs.attentions[4]</code> — shape (1, 12, T, T). For each of the 12 heads, extract the (T, T) attention matrix.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">03</span>
+            <span class="step-text"><strong>Visualize:</strong> Create a 4×3 subplot grid. For each head, plot the attention matrix as a heatmap. Label axes with token strings. Use a sequential colormap (Blues or Greens).</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">04</span>
+            <span class="step-text"><strong>Classify:</strong> For each head, assign a category: (a) previous-token — strong sub-diagonal; (b) diagonal — attends to self; (c) attention sink — most weight on position 0; (d) broad/diffuse — nearly uniform; (e) task-specific — attends selectively to content tokens.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">05</span>
+            <span class="step-text"><strong>Quantify:</strong> Compute attention entropy for each head. Rank heads by entropy (lowest to highest). Do low-entropy heads correspond to focused categories (previous-token, sink) and high-entropy to diffuse?</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">06</span>
+            <span class="step-text"><strong>Induction check:</strong> Run the model on "cat dog cat dog cat dog" and check layer 4 heads for an induction-like pattern (attending from token t to the token k positions back when the same token appeared earlier).</span>
+          </li>
+        </ol>
+        <p><strong>Expected output:</strong> At least 2–3 heads should be clearly previous-token heads (strong off-diagonal). At least 1 head should be an attention sink (dominant weight at position 0). The classification-entropy correlation should hold for most heads.</p>
+        <p><strong>Success criteria:</strong> Correctly classify more than 6 of 12 heads. Identify at least one induction-like head in the repeated-token experiment.</p>
+        <p><strong>Reflection:</strong> What would it mean if most heads are attention sinks? What does that imply about information routing for this sentence? Could a head be both an attention sink AND useful — and how would you test that?</p>
+        <p><strong>Stretch:</strong> Run the same analysis on a longer repeated-token sentence "cat cat cat dog dog dog cat cat cat" and look for induction heads in layers 3–6. Does the induction head pattern grow stronger as the context length increases?</p>
+        <div class="callout callout-rose">
+          <span class="callout-label">Common Mistake</span>
+          <p>Do not average attention weights across heads before plotting — this destroys the per-head specialization that makes attention analysis useful. Always plot individual heads. The "average attention map" is a commonly cited but methodologically flawed visualization.</p>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ ARTIFACT -->
+    <section id="artifact" class="lesson-section">
+      <h2>Real Model Artifact</h2>
+      <p>Two foundational empirical results anchor attention mechanics research:</p>
+      <div class="callout callout-teal">
+        <span class="callout-label">Elhage et al. 2021 — Mathematical Framework</span>
+        <p>Identifies that GPT-2's attention heads decompose cleanly into QK circuits (attention pattern computation) and OV circuits (value transformation). Head 4.4 and head 4.10 in GPT-2 are canonical induction heads: 4.4 is the induction head proper, and heads in layers 0–1 provide the previous-token signal it relies on. The W_Q<sup>T</sup>W_K matrix for head 4.4 shows a clear "token-match" structure: high scores when query and key are the same token.</p>
+      </div>
+      <div class="callout callout-violet">
+        <span class="callout-label">Wang et al. 2022 — Indirect Object Identification (IOI) Circuit</span>
+        <p>Identifies 26 specific attention heads involved in the task of predicting the indirect object in sentences like "Mary and John went to the store. Mary gave ___." The circuit consists of name-mover heads (9.6, 9.9, 10.0), backup name-movers, S-inhibition heads that suppress the subject name, and induction heads that detect name repetition. This is the most fully specified attention circuit in any language model to date. Key finding: the circuit uses a <em>negative feedback</em> mechanism — S-inhibition heads write in a direction that suppresses the subject name's logit, which indirectly boosts the indirect object's logit.</p>
+      </div>
+      <p><strong>Quantitative benchmarks:</strong></p>
+      <ul>
+        <li>GPT-2-small has 12 layers × 12 heads = 144 attention heads total.</li>
+        <li>The IOI circuit uses 26 heads — about 18% of the total.</li>
+        <li>Ablating the 3 name-mover heads drops IOI task accuracy from ~70% to ~30% (measured by logit difference between correct indirect object and subject).</li>
+        <li>Attention head 4.4 (induction): when its contribution is zero-ablated on a repeated-sequence task, next-token prediction accuracy drops by ~15 percentage points for the induction-specific tokens.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ ASSESSMENT -->
+    <section id="assessment" class="lesson-section">
+      <h2>Assessment Check</h2>
+      <div class="assessment-box">
+        <h3>Scenario 1: The Attention Sink Paradox</h3>
+        <p>You observe that an attention head in layer 7 always concentrates ≥ 90% of its attention weight on the [BOS] token (position 0), regardless of the input content or length. A colleague argues this head is "useless" and should be pruned to save compute. How do you evaluate this claim?</p>
+        <details style="margin-top:1rem;">
+          <summary style="font-family:var(--mono);font-size:0.8rem;cursor:pointer;color:var(--teal);">Show strong answer</summary>
+          <div style="padding:1rem 0 0.5rem;">
+            <p><strong>Strong answer:</strong> The colleague's claim is plausible but not established. Attention sinks are a documented phenomenon (Xiao et al. 2023) where heads park attention on [BOS] when they have no useful signal to attend to — the model effectively performs a "no-op" by attending to a token whose value representation has no meaningful content. However, the head is not necessarily useless:</p>
+            <ol style="padding-left:1.5rem;margin-top:0.5rem;">
+              <li style="margin-bottom:0.4rem;">The <strong>OV circuit</strong> of this head could still compute something useful. If W_V W_O ≈ 0 for most input directions, then the head contributes nothing to the residual stream regardless of its attention pattern — it IS a true no-op and could be pruned. But if W_V W_O has meaningful eigenvalues, the head might be doing useful processing at BOS and then routing that to other positions.</li>
+              <li style="margin-bottom:0.4rem;"><strong>Ablation test:</strong> Zero-ablate the head's output (set it to zero) and measure the change in task performance. If performance is unchanged, the head is functionally useless on the tested distribution. If performance drops, it was contributing something.</li>
+              <li style="margin-bottom:0.4rem;"><strong>Input distribution sensitivity:</strong> The head may be an attention sink on common inputs but specialized on rare or specific inputs. Test on a diverse distribution before concluding it is universally a sink.</li>
+            </ol>
+            <p style="margin-top:0.8rem;">Pruning without ablation testing is premature. The correct methodology is: (1) measure OV circuit norm; (2) ablate and test performance; (3) only prune if both suggest low contribution.</p>
+          </div>
+        </details>
+      </div>
+      <div class="assessment-box">
+        <h3>Scenario 2: Causal Responsibility for IOI</h3>
+        <p>You want to test whether attention head H at layer L is causally responsible for predicting the correct indirect object in a sentence like "Mary gave John a book. He returned it to ___." (Expected: "Mary"). You have observed that H has high attention weight from the blank position to "Mary." Is attention weight sufficient evidence? If not, how would you establish causality?</p>
+        <details style="margin-top:1rem;">
+          <summary style="font-family:var(--mono);font-size:0.8rem;cursor:pointer;color:var(--teal);">Show strong answer</summary>
+          <div style="padding:1rem 0 0.5rem;">
+            <p><strong>Strong answer:</strong> Attention weight is correlational evidence, not causal evidence. High attention weight from position i to position j shows the head is <em>looking at</em> j, but does not establish that the head's output is <em>responsible</em> for the correct prediction. To establish causality:</p>
+            <ol style="padding-left:1.5rem;margin-top:0.5rem;">
+              <li style="margin-bottom:0.4rem;"><strong>Activation patching:</strong> Run the model on a corrupted version where "Mary" is replaced with another name (e.g., "Susan"). Record the activations. Now run on the original input but patch the output of head H from the corrupted run. If the model's prediction shifts away from "Mary," head H is causally necessary for routing "Mary."</li>
+              <li style="margin-bottom:0.4rem;"><strong>Ablation:</strong> Zero-ablate head H (set its output contribution to zero). Measure the logit difference between "Mary" and "John." If this difference decreases substantially (say, by > 2 log-units), head H is causally important.</li>
+              <li style="margin-bottom:0.4rem;"><strong>OV circuit analysis:</strong> Check whether W_V W_O for head H has a large projection onto the "Mary" direction in the unembedding space. If the head is copying "Mary"s embedding into the residual stream, you should see a positive dot product between the head's output and the unembedding vector for "Mary."</li>
+            </ol>
+            <p style="margin-top:0.8rem;">The gold standard is activation patching + direct logit attribution together. Attention pattern visualization alone can mislead: a head may attend to Mary but use its OV circuit to move entirely different information.</p>
+          </div>
+        </details>
+      </div>
+      <div class="assessment-box">
+        <h3>Scenario 3: Multi-Head Redundancy</h3>
+        <p>You find that ablating name-mover head 9.6 reduces IOI accuracy by 15%, but ablating heads 9.6, 9.9, and 10.0 simultaneously reduces it by 45% — more than the sum of individual effects (15% + 12% + 8% = 35%). What does this suggest about the circuit's structure?</p>
+        <details style="margin-top:1rem;">
+          <summary style="font-family:var(--mono);font-size:0.8rem;cursor:pointer;color:var(--teal);">Show strong answer</summary>
+          <div style="padding:1rem 0 0.5rem;">
+            <p><strong>Strong answer:</strong> The super-additive effect (joint ablation > sum of individual ablations) indicates that these heads are <strong>redundant backups</strong> rather than independent contributors. When head 9.6 alone is ablated, heads 9.9 and 10.0 compensate — the model maintains partial IOI performance because the backup heads increase their effective contribution. When all three are ablated simultaneously, the compensation mechanism fails entirely, revealing the full circuit's contribution.</p>
+            <p style="margin-top:0.8rem;">This is the "backup name-mover" phenomenon documented in Wang et al. 2022. The circuit has built-in redundancy that makes individual ablations underestimate the importance of the overall name-mover function. The correct interpretation is that the <em>functional role</em> (name-moving) is implemented by the 3-head ensemble, not by any single head. Circuits should be understood at the functional level, not the individual-head level.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ REFERENCES -->
+    <section id="references" class="lesson-section">
+      <h2>References</h2>
+      <ul class="ref-list">
+        <li>Vaswani, A. et al. (2017). <em>Attention Is All You Need.</em> NeurIPS. Introduced the transformer architecture and scaled dot-product attention.</li>
+        <li>Elhage, N. et al. (2021). <em>A Mathematical Framework for Transformer Circuits.</em> Anthropic. Introduced QK/OV decomposition, induction heads, and the residual stream perspective.</li>
+        <li>Olsson, C. et al. (2022). <em>In-context Learning and Induction Heads.</em> Anthropic. Demonstrates that induction heads cause in-context learning, using both correlational and causal evidence.</li>
+        <li>Wang, K. et al. (2022). <em>Interpretability in the Wild: a Circuit for Indirect Object Identification in GPT-2 small.</em> ICLR 2023. Full circuit-level analysis of 26 attention heads in the IOI task.</li>
+        <li>Dosovitskiy, A. et al. (2020). <em>An Image is Worth 16×16 Words: Transformers for Image Recognition at Scale.</em> ICLR 2021. Introduced ViT; attention head specialization discussed in subsequent work.</li>
+        <li>Xiao, G. et al. (2023). <em>Efficient Streaming Language Models with Attention Sinks.</em> Demonstrates the attention sink phenomenon and proposes StreamingLLM.</li>
+        <li>Radford, A. et al. (2022). <em>Robust Speech Recognition via Large-Scale Weak Supervision.</em> OpenAI. Introduces Whisper; cross-attention alignment discussed in follow-up interpretability work.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ NEXT -->
+    <section id="next" class="lesson-section">
+      <h2>Next Step</h2>
+      <p>You have now seen how attention heads route information between positions and how the QK/OV decomposition enables mechanistic analysis. The next lesson zooms in on the other major architectural component: MLP layers, which transform information <em>within</em> a position and are responsible for storing factual knowledge.</p>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:2rem;">
+        <a href="../track1/prediction.html" style="display:inline-flex;align-items:center;gap:0.5rem;background:var(--sand);color:var(--ink);font-family:var(--mono);font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.75rem 1.5rem;text-decoration:none;border-radius:2px;border:1px solid var(--rule);">← Previous: Prediction</a>
+        <a href="mlp-mechanics.html" class="next-btn">Next: MLP Mechanics →</a>
+      </div>
+    </section>
+  </main>
+</div>
+<footer>
+  <span>MI Atlas — Mechanistic Interpretability Course</span>
+  <span>Track 2: Architecture</span>
+  <span style="color:#4a4a48;">Lesson 1 of 3</span>
+</footer>
+<script>
+  // Sidebar scroll-spy
+  const sections = document.querySelectorAll('.lesson-section');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navLinks.forEach(link => {
+          link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
