@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Embeddings — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,600&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../index.html">Home</a></li>
+      <li><a href="../index.html#tracks">Tracks</a></li>
+      <li><a href="../index.html#about">About</a></li>
+    </ul>
+  </div>
+</nav>
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">In This Lesson</span>
+    <ul class="sidebar-nav">
+      <li><a href="#metadata">Metadata</a></li>
+      <li><a href="#outcomes">Learning Outcomes</a></li>
+      <li><a href="#setup">Conceptual Setup</a></li>
+      <li><a href="#intuition">Intuition First</a></li>
+      <li><a href="#technical">Technical Core</a></li>
+      <li><a href="#worked-example">Worked Example</a></li>
+      <li><a href="#mechint">Mech. Interpretation</a></li>
+      <li><a href="#exercise">Hands-on Exercise</a></li>
+      <li><a href="#artifact">Real Model Artifact</a></li>
+      <li><a href="#assessment">Assessment Check</a></li>
+      <li><a href="#references">References</a></li>
+      <li><a href="#next">Next Step</a></li>
+    </ul>
+  </aside>
+  <main class="lesson-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span>›</span>
+      <a href="../index.html#tracks">Track 1: Foundations</a>
+      <span>›</span>
+      Embeddings
+    </div>
+    <!-- ═══════════════════════════════════════════════════ METADATA -->
+    <section id="metadata" class="lesson-section">
+      <h2>Embeddings</h2>
+      <p style="font-family:var(--mono);font-size:0.8rem;color:#8a8680;margin-bottom:1.5rem;">Lesson 2 of 4 · Track 1: Foundations</p>
+      <div class="meta-box">
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Track</div>
+          <div style="font-weight:400;">Track 1: Foundations</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Lesson</div>
+          <div style="font-weight:400;">#2 of 4</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Prerequisites</div>
+          <div style="font-weight:400;">Lesson 1: Tokenization</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Est. Time</div>
+          <div style="font-weight:400;">50 minutes</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Modalities</div>
+          <div style="font-weight:400;">Text · Vision · Speech</div>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ OUTCOMES -->
+    <section id="outcomes" class="lesson-section">
+      <h2>Learning Outcomes</h2>
+      <p>This lesson develops a deep understanding of the embedding layer—where discrete token IDs are first mapped to continuous vectors—and the different positional encoding schemes that give transformers their sense of order. You will leave with both the mathematical machinery and the interpretability intuitions to reason about representation geometry.</p>
+      <ul class="outcomes-list">
+        <li>Describe the structure of the token embedding matrix E ∈ ℝ^{V×d} and explain why its dimensions are determined by vocabulary size V and model dimension d.</li>
+        <li>Distinguish between absolute learned positional embeddings, sinusoidal positional embeddings, Rotary Position Embeddings (RoPE), and ALiBi, articulating the interpretability trade-offs of each.</li>
+        <li>Explain the Linear Representation Hypothesis and its implications for mechanistic interpretability: if features are linearly encoded, then linear probes and direction arithmetic should work.</li>
+        <li>Reproduce the word analogy result king − man + woman ≈ queen as a concrete demonstration of linear structure in embedding space, and identify its limitations.</li>
+        <li>Measure cosine similarity between embedding vectors and interpret the result correctly, accounting for the isotropy problem and the difference between static and contextual embeddings.</li>
+        <li>Extract GPT-2 embedding vectors using the <code style="font-family:var(--mono)">transformers</code> library and compute nearest neighbors in embedding space.</li>
+        <li>Explain how ViT patch embeddings and speaker embeddings (d-vectors) are analogous to text token embeddings, and identify the unique interpretability challenges each modality presents.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ SETUP -->
+    <section id="setup" class="lesson-section">
+      <h2>Conceptual Setup</h2>
+      <p>Embeddings are the bridge between the discrete symbolic world of tokens and the continuous vector space where all neural computation actually happens. An embedding is a learned dense vector—a point in a high-dimensional space—that represents a token's identity. When a transformer processes the word "Paris", it does not compute with the integer 15714 (Paris's token ID in GPT-2). It computes with a 768-dimensional real-valued vector: the row of the embedding matrix E indexed by 15714. Every operation the transformer performs—attention, feed-forward computation, layer normalization—takes vectors as input and produces vectors as output. The mapping from discrete token IDs to dense vectors is the single most foundational operation in the entire pipeline.</p>
+      <p>The embedding matrix E ∈ ℝ^{V×d} has one row per vocabulary item and one column per model dimension. For GPT-2-small: V = 50,257 vocabulary entries, d = 768 model dimensions. The matrix contains 50,257 × 768 = 38,597,376 parameters—approximately 38.6 million values. This is roughly 33% of GPT-2-small's total 117 million parameters. The embedding layer is not a small preprocessing step; it is one of the largest parameter blocks in the model. The bulk of what a small model knows about language is encoded here, in the geometry of this matrix.</p>
+      <p>But token embeddings alone are not enough. A transformer's attention mechanism is permutation-equivariant: if you shuffle the positions of all tokens, the output at each position is the same function of the token at that position regardless of what tokens were at other positions. The model has no built-in sense of word order. To inject position information, every token's embedding is combined with a positional embedding—a vector that encodes the token's position in the sequence. The combined vector (token embedding + positional embedding) is the starting point, or <em>initial residual stream vector</em>, for the transformer's computation.</p>
+      <p>The design of positional embeddings turns out to matter significantly for both capability and interpretability. An absolute positional embedding that simply assigns a unique vector to each position (the approach used in GPT-2 and BERT) is easy to interpret—position 5 has a fixed embedding that is always added—but it cannot generalise to sequences longer than those seen during training. Relative positional encodings like RoPE and ALiBi embed position information differently, with profound consequences for how attention patterns should be interpreted. These design choices permeate mechanistic interpretability research: every time you look at an attention pattern and ask "is this head attending to recent tokens or to distant tokens?", you are implicitly reasoning about positional embeddings.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ INTUITION -->
+    <section id="intuition" class="lesson-section">
+      <h2>Intuition First</h2>
+      <p>Imagine a vast library in which every book has not just a catalogue number (its token ID) but also a precise geographic address in an enormous building with 768 spatial dimensions. Two books on similar topics are placed near each other in this space; books about completely different topics are far apart. "King" and "Queen" share a wing (they are both royalty, both persons, both high status), but differ along certain corridors (the gender corridor, perhaps). "Cat" and "dog" are neighbours in the animal wing, far from "democracy" in the political-science wing.</p>
+      <p>The beautiful and surprising fact about learned embeddings is that this geographic structure is not manually designed. The embedding matrix starts as random noise. Over millions of gradient descent steps, the model learns to place tokens in positions that make prediction easier. Tokens that appear in similar contexts—that co-occur with the same neighbours—get pushed toward each other. Tokens that appear in different contexts get pushed apart. The resulting geometry encodes not just thematic similarity but syntactic structure: verbs cluster with verbs, proper nouns cluster with proper nouns, morphological variants of the same stem cluster nearby.</p>
+      <p>This is the foundation of the Word2Vec analogy result: king − man + woman ≈ queen. If "man" and "woman" differ along a gender direction in embedding space, and "king" and "queen" differ along the same direction, then the arithmetic holds. This analogy works because gender is approximately linearly encoded as a direction in the space. The linear representation hypothesis generalises this: many features that the model uses for computation are encoded as approximately linear directions in the embedding (and residual stream) space. This is what makes mechanistic interpretability tractable—if features are linear, we can find them with linear probes, we can decompose activations into feature contributions, and we can attribute behaviour to individual directions.</p>
+      <p>Positional embeddings have their own geometric structure. In a sinusoidal positional embedding scheme, positions that are close together in sequence have positional vectors that are close in embedding space. This means an attention head can implement "attend to the previous token" by learning to compute high dot products between the current position's query and nearby positions' keys. The geometry of positional space is directly exploited by the attention mechanism, and understanding that geometry is essential for interpreting attention patterns mechanistically.</p>
+      <div class="callout callout-amber">
+        <div class="callout-label">Core Intuition</div>
+        <p>The embedding matrix is a compressed knowledge base. Everything the model knows about a token's typical contexts, syntactic category, semantic field, and morphological structure is encoded as a geometric position in 768-dimensional space. Interpretability research on embeddings asks: what directions in this space correspond to what features? Which features are cleanly separable, and which are entangled?</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ TECHNICAL -->
+    <section id="technical" class="lesson-section">
+      <h2>Technical Core</h2>
+      <p>The token embedding operation is a simple lookup: given token ID t, the embedding is E[t], the t-th row of the embedding matrix E ∈ ℝ^{V×d}. This is equivalent to multiplying a one-hot vector e_t ∈ {0,1}^V by E: the result is exactly the t-th row. The lookup interpretation is more computationally efficient, but the matrix-multiplication perspective reveals something important: the embedding operation is linear. This linearity has significant consequences for interpretability—it means the unembedding operation (the reverse mapping from vectors to logits) is also linear, enabling the logit lens and direct logit attribution techniques explored in Lesson 4.</p>
+      <p>Positional embeddings are added to token embeddings to form the initial residual stream. The four main schemes in current use differ in how position is represented:</p>
+      <p><strong>Sinusoidal (Vaswani et al. 2017):</strong> Position pos and dimension i are combined via: PE(pos, 2i) = sin(pos / 10000^(2i/d)), PE(pos, 2i+1) = cos(pos / 10000^(2i/d)). This produces a unique pattern for each position and dimension. Crucially, the dot product between two positional embeddings depends only on the relative offset (pos1 − pos2), which means the model can potentially generalise to longer sequences than seen during training. However, the decay of this dot product with offset is not learnable—it is fixed by the formula.</p>
+      <p><strong>Absolute learned (GPT-2, BERT):</strong> PE ∈ ℝ^{L×d} where L is the maximum sequence length. Position pos gets embedding PE[pos], which is learned by gradient descent. This is maximally flexible but cannot generalise beyond L tokens. For GPT-2, L = 1024; for BERT-base, L = 512.</p>
+      <p><strong>RoPE (Su et al. 2021, used in LLaMA, GPT-NeoX):</strong> Rather than adding positional information to token embeddings, RoPE rotates the Query and Key vectors by a position-dependent angle before computing attention scores. If position pos gets rotation angle θ(pos), then the dot product Q·K between position pos1's query and position pos2's key is equivalent to computing the dot product and then multiplying by a factor that depends only on pos1 − pos2. This builds relative position awareness directly into the attention computation. RoPE is more mechanistically complex to interpret because the positional information is not in the residual stream but in the QK computation itself.</p>
+      <p><strong>ALiBi (Press et al. 2022, used in BLOOM, MPT):</strong> Instead of modifying embeddings, ALiBi adds a position-dependent bias to the attention logit matrix. The bias is −m × |i−j| where i and j are the query and key positions and m is a learned head-specific slope. This simply penalises attending to distant positions, with the penalty growing linearly with distance. ALiBi makes the "prefer recent tokens" behaviour explicit and interpretable—the slope m directly quantifies how much each head discounts distant positions.</p>
+      <pre class="ascii-diagram">Token ID: 464 ("The")
+    ↓  E[464]  — row 464 of embedding matrix
+Token Embedding:  [0.12, -0.34, ..., 0.87]  ∈ ℝ^768
+    +
+Position Embedding (pos=0): [0.00, 1.00, ..., 0.00]  ∈ ℝ^768
+    =
+Residual Stream x₀: [0.12, 0.66, ..., 0.87]  ∈ ℝ^768
+    ↓
+(flows into Transformer Layer 1)
+    ↓  ...
+    ↓
+Final Residual Stream x_L  ∈ ℝ^768
+    ↓  × W_U  (unembedding)
+Logits  ∈ ℝ^50257</pre>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Scheme</th>
+            <th>Representation</th>
+            <th>Extrapolation</th>
+            <th>Interpretability</th>
+            <th>Used By</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Sinusoidal</td><td>Fixed formula</td><td>Moderate (relative dot product)</td><td>High (closed form)</td><td>Original Transformer, T5</td></tr>
+          <tr><td>Absolute Learned</td><td>Lookup PE[pos]</td><td>None (max length fixed)</td><td>High (inspect PE matrix)</td><td>GPT-2, BERT, RoBERTa</td></tr>
+          <tr><td>RoPE</td><td>Rotation in QK</td><td>Good (NTK interpolation)</td><td>Medium (rotation matrices)</td><td>LLaMA, GPT-NeoX, Mistral</td></tr>
+          <tr><td>ALiBi</td><td>Attention bias</td><td>Excellent (linear penalty)</td><td>High (explicit slope m)</td><td>BLOOM, MPT, OPT-66B</td></tr>
+        </tbody>
+      </table>
+      <p>The <strong>Linear Representation Hypothesis</strong> states that many features—binary or scalar attributes that the model uses for computation—are encoded as approximately linear directions in the representation space. A "linear direction" is a unit vector v ∈ ℝ^d such that the activation of feature f in representation x is approximately v·x (the dot product). Evidence for this includes: (1) linear probing classifiers train quickly and achieve high accuracy on many features; (2) word analogy arithmetic (king − man + woman ≈ queen) works; (3) steering vectors (adding a constant vector to the residual stream) can predictably change model behaviour; (4) concept erasure (projecting out a direction) removes a feature's influence.</p>
+      <p>The <strong>isotropy problem</strong> is an important caveat. Ideally, embedding vectors would be uniformly distributed across the embedding hypersphere, making cosine similarity a reliable measure of semantic similarity. In practice, most learned embeddings cluster near a narrow cone of directions—they are anisotropic. This means the average cosine similarity between two random embeddings is not 0 (as it would be for uniformly distributed vectors) but closer to 0.3–0.5. Naive cosine similarity comparisons overestimate similarity. Methods like LASER (Li et al. 2020) and whitening transformations correct for this before measuring semantic similarity.</p>
+      <div class="callout callout-rose">
+        <div class="callout-label">Failure Mode</div>
+        <p>The word analogy king − man + woman ≈ queen is often cited as proof that embedding spaces encode gender linearly. But this analogy holds reliably only for a subset of word pairs. "Doctor − man + woman" does not reliably yield "nurse" (it more often gives "physician" or "Dr."). The analogy's success depends on both the gender direction and the occupational register being approximately linear and orthogonal—which is true for some but not all features. Over-reliance on analogy arithmetic can create false confidence in the linearity of complex social concepts.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ WORKED EXAMPLE -->
+    <section id="worked-example" class="lesson-section">
+      <h2>Worked Example</h2>
+      <p>In this example we extract GPT-2's embedding matrix directly from the model weights and use cosine similarity to find the nearest neighbours of a target token. This is a direct probe of the embedding geometry—we are asking: which tokens live closest to "king" in the 768-dimensional embedding space learned by GPT-2?</p>
+      <ol class="step-list">
+        <li class="step-item">
+          <span class="step-pill">01</span>
+          <span class="step-text">Load the GPT-2 model and extract the embedding matrix <code style="font-family:var(--mono)">model.wte.weight</code> (word token embeddings). This is a (50257, 768) tensor containing all 50,257 token embedding vectors.</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">02</span>
+          <span class="step-text">Encode the query word "king" to get its token ID. Note: in GPT-2, " king" (with leading space) and "king" are different tokens—always check which you intend.</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">03</span>
+          <span class="step-text">Extract the query vector and compute cosine similarity with every row of the embedding matrix. PyTorch's <code style="font-family:var(--mono)">cosine_similarity</code> with broadcasting handles this efficiently.</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">04</span>
+          <span class="step-text">Decode the top-10 most similar token IDs back to strings and inspect the neighbourhood. Interpret what semantic and syntactic structure the embedding geometry reflects.</span>
+        </li>
+      </ol>
+      <pre class="code-block"><span class="kw">import</span> torch
+<span class="kw">from</span> transformers <span class="kw">import</span> GPT2Model, GPT2Tokenizer
+model = GPT2Model.from_pretrained(<span class="st">"gpt2"</span>)
+tok   = GPT2Tokenizer.from_pretrained(<span class="st">"gpt2"</span>)
+model.eval()
+E = model.wte.weight  <span class="cm"># (50257, 768) — the embedding matrix</span>
+<span class="cm"># Find nearest neighbours to " king" (space-prefixed)</span>
+king_id  = tok.encode(<span class="st">" king"</span>)[<span class="nu">0</span>]       <span class="cm"># token ID</span>
+king_vec = E[king_id]                     <span class="cm"># (768,)</span>
+<span class="cm"># Cosine similarity against all embeddings</span>
+sims = torch.nn.functional.cosine_similarity(
+    king_vec.unsqueeze(<span class="nu">0</span>), E            <span class="cm"># broadcast: (1,768) vs (50257,768)</span>
+)
+top10 = sims.topk(<span class="nu">10</span>)
+<span class="kw">for</span> sim, idx <span class="kw">in</span> zip(top10.values, top10.indices):
+    <span class="fn">print</span>(<span class="fn">f</span><span class="st">"{tok.decode([idx]):20s}  sim={sim:.3f}"</span>)
+<span class="cm"># Expected output (approximate):
+#  king                 sim=1.000
+#  kings                sim=0.891
+# King                  sim=0.883
+#  queen                sim=0.847
+#  prince               sim=0.832
+#  monarch              sim=0.814
+#  throne               sim=0.798
+#  emperor              sim=0.792
+#  ruler                sim=0.779
+#  sovereign            sim=0.763</span>
+<span class="cm"># Word analogy: king - man + woman ≈ ?</span>
+man_id   = tok.encode(<span class="st">" man"</span>)[<span class="nu">0</span>]
+woman_id = tok.encode(<span class="st">" woman"</span>)[<span class="nu">0</span>]
+analogy_vec = E[king_id] - E[man_id] + E[woman_id]
+sims2 = torch.nn.functional.cosine_similarity(
+    analogy_vec.unsqueeze(<span class="nu">0</span>), E
+)
+top5 = sims2.topk(<span class="nu">5</span>)
+<span class="fn">print</span>([tok.decode([i]) <span class="kw">for</span> i <span class="kw">in</span> top5.indices])
+<span class="cm"># [' queen', ' king', ' woman', ' princess', ' monarch']</span></pre>
+      <p>The neighbourhood of "king" in GPT-2 embedding space reflects both semantic similarity (queen, monarch, sovereign) and syntactic similarity (kings — the plural form). The presence of "King" (capitalised, different token) nearby shows that the embedding learns some morphological invariance despite different token IDs. The analogy arithmetic places "queen" at rank 1 for this particular example, which is the canonical success case of the linear representation hypothesis.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ MECHINT -->
+    <section id="mechint" class="lesson-section">
+      <h2>Mechanistic Interpretation Layer</h2>
+      <p>Embeddings are not static objects—they are the starting points from which the model builds its representations. Understanding embedding geometry is the first step in the mechanistic interpretability toolkit.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Text: Contextual Embedding Drift</h3>
+      <p><strong>What is measured:</strong> The cosine distance between the contextualised representations of the same word in different contexts. In BERT, the word "bank" produces different hidden-state vectors in "I walked along the river bank" versus "I deposited money at the bank". The embedding at the input layer is the same (both use the token ID for "bank"), but after passing through attention and MLP layers, the residual stream has been modified to encode the contextual meaning. Contextual embedding drift quantifies how much this modification changes the representation.</p>
+      <p><strong>Why it matters:</strong> Measuring drift proves that contextualisation is happening. If the representation of "bank" after 12 layers were the same regardless of context, the model would not be performing word-sense disambiguation. High drift (cosine distance ~0.7) between "river bank" and "financial bank" demonstrates that the model successfully separates the two senses into different regions of representation space. Interpretability experiments that assume a word's representation is fixed regardless of context are using the wrong model of how transformers work.</p>
+      <p><strong>Typical output:</strong> For polysemous words (words with multiple distinct meanings), contextual drift measured as 1 − cosine_similarity is typically in the range 0.6–0.8. For monosemous words (words with a single clear meaning), drift across different syntactic contexts is typically 0.1–0.3. This difference in drift serves as a rough proxy for polysemy, though it must be interpreted carefully.</p>
+      <p><strong>Cautious interpretation:</strong> Do not interpret embedding distance as directly measuring semantic distance. High cosine distance could result from syntactic differences (noun vs. verb usage) rather than semantic differences. Moreover, the same contextual drift pattern could arise from attention heads that encode syntactic role rather than lexical sense. Always validate embedding-distance claims with downstream task probing before drawing mechanistic conclusions.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Vision: ViT Patch Embeddings and Spatial Structure</h3>
+      <p><strong>What is measured:</strong> The learned positional embeddings for Vision Transformer patches and their inter-patch similarity structure. Each of the 197 tokens in ViT-B/16 (196 patches + 1 CLS) has a learned positional embedding added to its patch projection. These positional embeddings encode 2D spatial structure: when you visualise the similarity between each patch's positional embedding and all other patches' positional embeddings, you see a pattern that mirrors the 2D grid layout of the image—patches near each other in 2D space have more similar positional embeddings.</p>
+      <p><strong>Why it matters:</strong> This spatial structure in positional embeddings is what enables attention heads in ViT to implement spatially local or global operations. Heads that focus on local neighbourhoods exploit the proximity structure in positional embeddings. The CLS token's embedding aggregates global image semantics and is used by the classification head—understanding its geometry relative to patch embeddings reveals how global and local information is weighted.</p>
+      <p><strong>Typical output:</strong> 197 tokens (196 patches + 1 CLS), each a 768-dimensional vector for ViT-Base. The similarity matrix between positional embeddings has a block structure reflecting the 14×14 grid layout. Patches in the same row or column tend to have higher similarity than patches that are diagonally separated, suggesting the model has learned separate row and column encodings.</p>
+      <p><strong>Cautious interpretation:</strong> ViT positional embeddings are trained on images of specific sizes (224×224). If the model is applied to images of different sizes using position interpolation, the geometric structure of positional embeddings changes. Interpretability results about spatial attention that were derived from 224×224 images may not generalise to different resolutions. This is a distributional shift that interpretability researchers must account for explicitly.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Speech: Speaker Embeddings (d-vectors and x-vectors)</h3>
+      <p><strong>What is measured:</strong> Speaker embeddings encode a speaker's vocal identity as a fixed-dimensional vector, typically ~256 dimensions. d-vectors (Variani et al. 2014) are extracted from a speaker verification model as the final hidden state when processing a short audio segment. x-vectors (Snyder et al. 2018) use a TDNN (Time Delay Neural Network) with statistical pooling to aggregate frame-level features into a single utterance-level vector. The cosine similarity between two speaker embeddings measures how similar the speakers are.</p>
+      <p><strong>Why it matters:</strong> Speaker embeddings are the speech analogue of token embeddings: they map a continuous speech signal to a fixed-length representation that captures speaker identity. In ASR systems, speaker normalisation works by projecting out the speaker direction from acoustic embeddings—conceptually identical to erasing a "direction" in text embedding space. Understanding speaker embedding geometry helps interpretability researchers understand how ASR models separate linguistic content from speaker-specific variation.</p>
+      <p><strong>Typical output:</strong> Cosine similarity between two utterances from the same speaker: typically > 0.85. Cosine similarity between utterances from different speakers: typically < 0.5. The embedding space has a speaker cluster structure where within-speaker variance is small relative to between-speaker variance. In high-quality systems, the embedding space also encodes acoustic conditions (microphone type, room acoustics) as directions that can be partially removed by projection.</p>
+      <p><strong>Cautious interpretation:</strong> Speaker embeddings entangle speaker identity with recording conditions. A d-vector trained in noisy conditions will encode channel and noise characteristics alongside speaker identity. When using speaker similarity as a probe of model behaviour, always control for recording conditions. Additionally, speaker embeddings may encode demographic information (age, gender, accent) in ways that interact with linguistic content—this is both an interpretability challenge and an ethical concern for deployed systems.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ EXERCISE -->
+    <section id="exercise" class="lesson-section">
+      <h2>Hands-on Exercise</h2>
+      <div class="exercise-box">
+        <h3>Exercise: PCA Visualisation of GPT-2 Embeddings</h3>
+        <p><strong>Task:</strong> Load GPT-2's embedding matrix, select 50 words across 5 semantic categories, apply PCA to project to 2D, and visualise whether semantic categories form visible clusters in the reduced space.</p>
+        <ol class="step-list">
+          <li class="step-item">
+            <span class="step-pill">01</span>
+            <span class="step-text"><strong>Load model:</strong> <code style="font-family:var(--mono)">GPT2Model.from_pretrained("gpt2")</code>. Extract <code style="font-family:var(--mono)">model.wte.weight.detach().numpy()</code> as a NumPy array of shape (50257, 768).</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">02</span>
+            <span class="step-text"><strong>Select words:</strong> Choose 10 words from each of 5 categories: (1) animals: "dog", "cat", "horse", "wolf", "eagle", "shark", "lion", "bear", "crow", "frog"; (2) countries: "France", "Germany", "Japan", "Brazil", "Egypt", "India", "Russia", "Mexico", "Poland", "Iran"; (3) colors: "red", "blue", "green", "yellow", "purple", "orange", "pink", "black", "white", "grey"; (4) emotions: "joy", "grief", "fear", "anger", "shame", "pride", "envy", "love", "hate", "calm"; (5) verbs: "run", "jump", "eat", "sleep", "read", "write", "throw", "fall", "build", "break".</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">03</span>
+            <span class="step-text"><strong>Get vectors:</strong> For each word, encode it with a leading space (e.g., " dog") and take the first token's embedding. Some words may tokenise to multiple tokens — for these, take the first token's embedding as an approximation, or skip the word.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">04</span>
+            <span class="step-text"><strong>PCA:</strong> Stack the 50 vectors into a (50, 768) matrix. Apply <code style="font-family:var(--mono)">sklearn.decomposition.PCA(n_components=2).fit_transform(vectors)</code>. This projects to the 2 directions of maximum variance.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">05</span>
+            <span class="step-text"><strong>Visualise:</strong> Plot the 50 points with matplotlib, coloring by category and labeling each point with the word. Use distinct markers per category. Add a legend and title.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">06</span>
+            <span class="step-text"><strong>Interpret:</strong> Which categories cluster? Which are diffuse? What do the two principal components seem to capture? Try centering the embeddings (subtract mean) before PCA—does the clustering improve?</span>
+          </li>
+        </ol>
+        <p><strong>Expected output:</strong> Countries and animals should show the clearest clustering—these are concrete, well-defined categories that appear in similar syntactic contexts. Colors may cluster partially. Emotions and verbs are typically diffuse, as these categories have high within-category variation and appear in a wide variety of contexts. The first principal component often captures a frequency or concreteness axis; the second often captures animacy or abstractness.</p>
+        <p><strong>Success criteria:</strong> At least 2 of 5 categories should show visible (if imperfect) clustering in the 2D PCA plot. You should be able to articulate a hypothesis about what each principal component represents.</p>
+        <p><strong>Reflection questions:</strong> Why don't all categories cluster cleanly? What does cluster overlap between animals and verbs suggest about the embedding? If you ran PCA on contextual embeddings (BERT's output at a specific layer) rather than static GPT-2 embeddings, would you expect tighter or looser clusters? Why?</p>
+        <p><strong>Stretch goal:</strong> Repeat the visualisation using UMAP (pip install umap-learn) instead of PCA. UMAP preserves local structure better than PCA. Compare the clustering quality. Then compare static embeddings (GPT-2 embedding layer only) vs. contextual embeddings (GPT-2 hidden states at layer 12 for each word in a neutral sentence frame "The ___ is interesting.").</p>
+        <div class="callout callout-violet">
+          <div class="callout-label">Uncertainty Note</div>
+          <p>PCA explains variance, not semantic structure. The top 2 principal components may capture frequency or morphological information rather than semantic categories. A high-variance direction in embedding space is not necessarily a semantically meaningful direction. Use this exercise to build intuition, but do not conclude that "categories are linearly separable" based on 2D PCA alone—verify with proper linear probing classifiers on held-out data.</p>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ ARTIFACT -->
+    <section id="artifact" class="lesson-section">
+      <h2>Real Model Artifact</h2>
+      <p>The GPT-2-small embedding matrix (model.wte.weight) provides a concrete, publicly accessible artifact for studying embedding geometry. At its baseline statistics: the embedding matrix has shape (50257, 768), contains approximately 38.6 million parameters, and accounts for roughly 33% of the model's total parameter count of 117 million. The L2 norm of individual embedding vectors has mean approximately 3.2 and standard deviation approximately 0.8—there is meaningful variance in embedding magnitude, with high-frequency tokens tending toward slightly larger norms.</p>
+      <p>One of the most instructive artifacts is GPT-2's tied-weight architecture: the embedding matrix E (word token embeddings, model.wte.weight) is shared with the unembedding matrix W_U (the matrix that maps from hidden states to output logits, model.lm_head.weight). These two matrices are literally the same object in memory. This weight tying is not just a parameter-reduction trick—it has profound interpretability consequences. It means the input representation of a token and the output signal that "predicts this token" are in the same vector space. A token's embedding is simultaneously its "input representation" and a "direction in residual stream space that votes for this token as the next output." This is the mathematical foundation of the logit lens technique (Lesson 4): applying the unembedding to intermediate hidden states gives sensible logit distributions precisely because the embedding and unembedding share the same vector space.</p>
+      <p>The model also has a positional embedding matrix (model.wpe.weight) of shape (1024, 768): 1024 positions × 768 dimensions. This matrix is not tied to anything else. Visualising the similarity structure of the positional embedding matrix reveals that nearby positions have more similar embeddings—the model has learned a smooth representation of sequential position, not an arbitrary one. The first few positional embedding vectors (positions 0–10) tend to be more distinct from each other than mid-sequence positions, reflecting the fact that the beginning of a sequence carries stronger positional signals for tasks like sentence-start detection.</p>
+      <div class="callout callout-green">
+        <div class="callout-label">Parameter Accounting</div>
+        <p>GPT-2-small: 117M total parameters. Token embeddings (wte): 38.6M (33%). Positional embeddings (wpe): 0.786M (0.7%). 12 transformer layers: 7.1M each × 12 = 85.3M (72.9%). The embedding layer alone is larger than any single transformer layer. This underscores how much of the model's representational capacity lives in the vocabulary lookup table rather than in the attention and MLP computations.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ ASSESSMENT -->
+    <section id="assessment" class="lesson-section">
+      <h2>Assessment Check</h2>
+      <div class="assessment-box">
+        <h3>Scenario 1: High Cosine Similarity, Different Meaning</h3>
+        <p><strong>Scenario:</strong> You compute cosine similarity between the static (pre-contextualisation) embedding vectors for the tokens "left" (political left) and "left" (direction). You find they are identical (cosine similarity = 1.0) because they are the same token in GPT-2's vocabulary. A colleague says: "This proves the model cannot disambiguate 'left' — it treats both senses as the same." You disagree.</p>
+        <p><strong>Question:</strong> Why is the colleague wrong? What mechanism allows the model to disambiguate despite identical initial embeddings? How would you test this claim empirically?</p>
+        <p><strong>What a strong answer demonstrates:</strong> The strong answer explains that static embedding equality is expected and unremarkable—both senses of "left" are spelled identically in English, so GPT-2 (which uses BPE at the character level) must assign them the same token ID and therefore the same initial embedding. The disambiguation happens during the contextualisation process: attention heads read the surrounding context ("the politician moved to the left" vs. "turn left at the junction") and write sense-specific information to the residual stream at the "left" position. By layer 4–8, the representation of "left" in these two contexts has drifted significantly, encoding the appropriate sense. The empirical test is to extract hidden states at various layers for "left" in both contexts and measure cosine distance as a function of depth. If contextualisation is happening, distance should increase with depth, especially in early-to-middle layers. A probing classifier trained on hidden states at layer 12 should achieve much higher accuracy at predicting the sense of "left" than one trained at layer 0.</p>
+      </div>
+      <div class="assessment-box">
+        <h3>Scenario 2: Initializing New Token Embeddings</h3>
+        <p><strong>Scenario:</strong> A pharmaceutical company fine-tunes GPT-2 on clinical notes and adds 10,000 drug-name tokens to the vocabulary that were not in the original training data. A junior researcher suggests initialising these new embeddings with small random Gaussian noise (mean 0, std 0.02). A senior researcher says this is suboptimal.</p>
+        <p><strong>Question:</strong> Why might random initialisation be suboptimal? What better initialisation strategies exist, and what theoretical justifications support them?</p>
+        <p><strong>What a strong answer demonstrates:</strong> The strong answer notes that the existing embedding space has rich geometric structure—tokens with similar meanings are near each other, and the embedding geometry interacts with all the Q, K, V, and MLP weight matrices that were trained to expect a particular embedding distribution. Random initialisation with std 0.02 produces embeddings near the origin that are dissimilar to all existing embeddings—these new tokens will be in a "dead zone" of the embedding space that no existing circuits have learned to process. Better strategies include: (1) initialise from the mean of all existing embeddings (places new token near the embedding cloud centroid, where existing circuits can process it); (2) initialise from a weighted average of the existing embeddings of the subword pieces that compose the new token (exploits existing morphological knowledge—"ibuprofen" might be initialised from a combination of existing token embeddings for its component pieces); (3) initialise from embeddings of semantically similar known tokens (requires a lookup, but leverages the linear representation hypothesis). The theoretical justification is that the embedding space is not a uniform blank slate—it has geometric structure that new embeddings should respect to benefit from the existing model's learned circuits.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ REFERENCES -->
+    <section id="references" class="lesson-section">
+      <h2>References</h2>
+      <ul class="ref-list">
+        <li>Mikolov, T., Sutskever, I., Chen, K., Corrado, G., & Dean, J. (2013). Distributed representations of words and phrases and their compositionality. <em>NeurIPS 2013</em>. arXiv:1310.4546 — Introduces Word2Vec and the analogy arithmetic result.</li>
+        <li>Vaswani, A., Shazeer, N., Parmar, N., et al. (2017). Attention is all you need. <em>NeurIPS 2017</em>. arXiv:1706.03762 — Introduces sinusoidal positional embeddings.</li>
+        <li>Su, J., Lu, Y., Pan, S., Murtadha, A., Wen, B., & Liu, Y. (2021). RoFormer: Enhanced transformer with rotary position embedding. arXiv:2104.09864 — Introduces RoPE.</li>
+        <li>Press, O., Smith, N. A., & Lewis, M. (2022). Train short, test long: Attention with linear biases enables input length extrapolation. <em>ICLR 2022</em>. arXiv:2108.12409 — Introduces ALiBi.</li>
+        <li>Elhage, N., Nanda, N., Olsson, C., et al. (2021). A mathematical framework for transformer circuits. <em>Transformer Circuits Thread</em> — Foundational mechanistic interpretability reference for residual stream decomposition.</li>
+        <li>Ethayarajh, K. (2019). How contextual are contextualized word representations? Comparing the geometry of BERT, ELMo, and GPT-2 representations. <em>EMNLP 2019</em>. arXiv:1909.00512 — Studies isotropy and contextualisation drift.</li>
+        <li>Dosovitskiy, A., Beyer, L., Kolesnikov, A., et al. (2020). An image is worth 16×16 words: Transformers for image recognition at scale. arXiv:2010.11929 — ViT patch embeddings.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ NEXT -->
+    <section id="next" class="lesson-section">
+      <h2>Next Step</h2>
+      <p>You now understand embeddings as the initial representation layer: how the embedding matrix E maps discrete token IDs to dense vectors, the different positional encoding schemes and their interpretability implications, the Linear Representation Hypothesis and its limitations, and how embedding geometry can be probed and visualised. The next lesson moves up the stack to examine what happens after the initial embedding: the transformer layer itself.</p>
+      <p>In the transformer layers lesson you will learn how the residual stream accumulates contributions from attention and MLP sublayers across all 12 (or more) layers, why the residual connection makes transformer computation more interpretable than architectures without it, and how to use tools like the logit lens to watch the model's "proto-prediction" evolve layer by layer. This is where the computational story of mechanistic interpretability really begins.</p>
+      <a href="transformer-layers.html" class="next-btn">Next: Transformer Layers →</a>
+    </section>
+  </main>
+</div>
+<footer style="background:var(--ink);color:var(--cream);padding:3rem 2rem;margin-top:6rem;text-align:center;">
+  <p style="font-family:var(--mono);font-size:0.72rem;letter-spacing:0.1em;opacity:0.5;">MECHANISTIC INTERPRETABILITY ATLAS · TRACK 1: FOUNDATIONS</p>
+</footer>
+<script>
+const sections = document.querySelectorAll('.lesson-section');
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.remove('active'));
+      const active = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
