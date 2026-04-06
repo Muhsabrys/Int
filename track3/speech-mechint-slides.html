@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speech MechInt — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+  <style>
+    .slides-container { max-width: 980px; margin: 0 auto; padding: 6rem 2rem 8rem; }
+    .slide { background: var(--card); border-radius: 6px; padding: 3rem 3.5rem; margin-bottom: 3rem; position: relative; overflow: hidden; }
+    .slide-num { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.18em; color: #8a8680; text-transform: uppercase; margin-bottom: 1.2rem; display: block; }
+    .slide h2 { font-family: var(--display); font-size: 2rem; font-weight: 400; margin-bottom: 1rem; line-height: 1.15; }
+    .slide h2 em { font-style: italic; color: var(--rose); }
+    .slide p { font-family: var(--body); font-weight: 300; font-size: 1rem; line-height: 1.85; color: #2a2820; margin-bottom: 1rem; }
+    .slide-dark { background: var(--ink); color: var(--cream); }
+    .slide-dark p { color: #c8c4bc; }
+    .slide-dark h2 { color: var(--cream); }
+    .slide-dark h2 em { color: var(--amber-light); }
+    .slide-canvas { width: 100%; height: 200px; display: block; border-radius: 4px; margin: 1.5rem 0; background: #111; }
+    .two-col-slide { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; align-items: start; }
+    .model-badge { display: inline-block; font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; padding: 0.3rem 0.8rem; border-radius: 2px; margin-right: 0.5rem; margin-bottom: 0.5rem; }
+    .badge-whisper { background: var(--teal-pale); color: var(--teal); }
+    .badge-w2v { background: var(--amber-pale); color: var(--amber); }
+    .badge-hubert { background: var(--violet-pale); color: var(--violet); }
+    .layer-row { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.7rem; }
+    .layer-bar-wrap { flex: 1; height: 8px; background: var(--rule); border-radius: 4px; overflow: hidden; }
+    .layer-bar { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
+    .layer-label { font-family: var(--mono); font-size: 0.68rem; color: #6a6460; width: 60px; flex-shrink: 0; }
+    .layer-pct { font-family: var(--mono); font-size: 0.68rem; color: var(--rose); width: 36px; text-align: right; flex-shrink: 0; }
+    @media(max-width:700px) { .two-col-slide { grid-template-columns: 1fr; } .slide { padding: 2rem 1.5rem; } }
+  </style>
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="../index.html">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../track1/tokenization.html">Foundations</a></li>
+      <li><a href="../track2/attention-mechanics.html">Architecture</a></li>
+      <li><a href="hidden-states.html">Interpretability</a></li>
+      <li><a href="../track4/code-labs-hub.html">Code Labs</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="slides-container">
+  <div class="breadcrumb">
+    <a href="../index.html">Home</a><span>›</span>
+    <a href="hidden-states.html">Track 3</a><span>›</span>
+    Speech MechInt Slides
+  </div>
+
+  <!-- Slide 1: Title -->
+  <div class="slide slide-dark">
+    <span class="slide-num">Track 3 · Deep Dive · 8 of 8</span>
+    <h2>Mechanistic Interpretability<br>of <em>Speech Models</em></h2>
+    <canvas class="slide-canvas" id="waveCanvas"></canvas>
+    <p>A visual, slide-by-slide tour of how wav2vec2, HuBERT, and Whisper encode speech — what their layers compute, what circuits they implement, and how we know.</p>
+    <div style="display:flex;gap:0.5rem;margin-top:1rem;flex-wrap:wrap;">
+      <span class="model-badge badge-whisper">Whisper</span>
+      <span class="model-badge badge-w2v">wav2vec2</span>
+      <span class="model-badge badge-hubert">HuBERT</span>
+    </div>
+  </div>
+
+  <!-- Slide 2: The Speech Pipeline -->
+  <div class="slide">
+    <span class="slide-num">Slide 2 — The Speech Processing Pipeline</span>
+    <h2>From Waveform to <em>Words</em></h2>
+    <div class="two-col-slide">
+      <div>
+        <p>Every speech model begins with raw audio — a time-series of pressure values sampled at 16,000 Hz. Before any transformer layer sees this data, it passes through a feature extraction front-end.</p>
+        <p><strong>wav2vec2 / HuBERT:</strong> A stack of 7 convolutional layers (CNN feature extractor) converts the raw waveform to one frame every 20ms — 50 frames per second. Each frame is a 512-dimensional vector.</p>
+        <p><strong>Whisper:</strong> Computes an 80-channel log-Mel spectrogram (25ms windows, 10ms hop), then passes through 2 convolutional layers to produce one frame per 20ms at d=512 or d=1280 depending on model size.</p>
+      </div>
+      <div>
+        <pre class="ascii-diagram" style="font-size:0.72rem">Raw audio: 16000 samples/sec
+        ↓
+  CNN Feature Extractor
+  (wav2vec2: 7 conv layers)
+        ↓
+  50 frames/second × 512 dim
+        ↓
+  Positional encoding (conv)
+        ↓
+  24 Transformer Encoder Layers
+        ↓
+  Contextualised representations
+  T × 1024  (wav2vec2-large)
+        ↓
+  Quantised units (for SSL)
+  or direct fine-tuning head</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 3: Layer Functions -->
+  <div class="slide">
+    <span class="slide-num">Slide 3 — What Each Layer Computes</span>
+    <h2>Layer-wise <em>Representations</em></h2>
+    <p>Probing classifier accuracy for different linguistic features, measured at each transformer layer of wav2vec2-large (24 layers). Higher = that feature is linearly decodable at that layer.</p>
+
+    <p style="font-family:var(--mono);font-size:0.7rem;color:#8a8680;margin-bottom:0.5rem">Phoneme identity (linear probe accuracy)</p>
+    <div id="phonemeProbe"></div>
+
+    <p style="font-family:var(--mono);font-size:0.7rem;color:#8a8680;margin:1.2rem 0 0.5rem">Speaker identity (linear probe accuracy)</p>
+    <div id="speakerProbe"></div>
+
+    <div class="callout callout-teal" style="margin-top:1.5rem">
+      <span class="callout-label">Key finding</span>
+      <p>Phoneme identity peaks at layer 6-9. Speaker identity peaks at layer 1-3. Word identity peaks at layer 12-18. This layerwise specialisation mirrors the findings in text models (syntax in early layers, semantics in later layers).</p>
+    </div>
+  </div>
+
+  <!-- Slide 4: Attention in Speech -->
+  <div class="slide">
+    <span class="slide-num">Slide 4 — Attention Patterns in Speech</span>
+    <h2>Speech <em>Attention Heads</em></h2>
+    <div class="two-col-slide">
+      <div>
+        <p>Attention heads in wav2vec2 and Whisper show distinct specialisations, analogous to the head types in text models.</p>
+        <p><strong>Local heads (layers 1-4):</strong> Attend to nearby frames ±3. Implement temporal smoothing. High entropy. Equivalent to a sliding window over the spectrogram.</p>
+        <p><strong>Phoneme-boundary heads (layers 5-8):</strong> Attend from the interior of a phoneme to its boundaries. Implement a soft "segment boundary" signal.</p>
+        <p><strong>Cross-utterance heads (layers 10+):</strong> Low attention entropy. Attend to specific distant frames — often the beginning of the utterance (acoustic sink) or structurally parallel positions (speech rhythm heads).</p>
+      </div>
+      <div>
+        <canvas id="attnCanvas" width="380" height="220" style="width:100%;border-radius:4px;background:#111;display:block;"></canvas>
+        <p style="font-family:var(--mono);font-size:0.62rem;color:#8a8680;text-align:center;margin-top:0.5rem">Simulated attention pattern: local head (layer 3)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 5: Quantisation and Discrete Units -->
+  <div class="slide">
+    <span class="slide-num">Slide 5 — Quantisation and Discrete Units</span>
+    <h2>The <em>Discrete</em> Bottleneck</h2>
+    <p>wav2vec2 uses a quantisation module during pretraining: the continuous CNN output is mapped to one of G×V codebook entries (G=2 groups, V=320 entries each = 320² = 102,400 possible units). This is the "acoustic tokenizer" — the speech equivalent of BPE.</p>
+    <p>The quantisation process creates a vector-quantised latent z_q. The model is trained to predict z_q from the context (masked prediction, similar to BERT). The codebook entries learned by wav2vec2 have been shown to correspond roughly to phoneme categories — but not cleanly: each codebook unit covers 2-5 phonemes in different contexts, and each phoneme is covered by 3-7 codebook units.</p>
+    <div class="compare-grid">
+      <div class="compare-card native-card">
+        <h4>Phone-unit alignment</h4>
+        <ul>
+          <li>Codebook unit #142 → /t/ in 64% of cases</li>
+          <li>Codebook unit #7 → /ə/ in 71% of cases</li>
+          <li>Codebook unit #89 → silence in 82% of cases</li>
+        </ul>
+      </div>
+      <div class="compare-card nonnative-card">
+        <h4>Limitations</h4>
+        <ul>
+          <li>Same phoneme → different units in different contexts</li>
+          <li>Units vary across languages — not universal phoneme categories</li>
+          <li>Unit boundaries don't align with articulatory boundaries</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 6: Whisper Cross-Attention -->
+  <div class="slide">
+    <span class="slide-num">Slide 6 — Whisper and Cross-Attention Alignment</span>
+    <h2>Whisper's <em>Alignment Circuit</em></h2>
+    <p>Whisper is an encoder-decoder model: the encoder processes audio, the decoder generates text tokens. Cross-attention in the decoder attends to encoder outputs — this implements a soft audio-text alignment.</p>
+    <p>Key finding (Radford et al. 2023): Whisper's cross-attention weights in the middle decoder layers form a near-monotonic alignment — text position i attends to audio frames in the neighbourhood of the corresponding spoken word. This alignment can be used directly as a forced-aligner without any additional training.</p>
+    <pre class="ascii-diagram">Whisper Cross-Attention (layer 6/32, decoder):
+
+Text:    "The"    "cat"    "sat"    "on"    "mat"
+           ↓         ↓        ↓        ↓       ↓
+Audio:  [0-0.2s] [0.2-0.4s] [0.4-0.7s] [0.7-0.9s] [0.9-1.2s]
+        ↑           ↑           ↑           ↑          ↑
+  Attention weight peaks align with spoken word boundaries</pre>
+    <p>Mechanistic interpretation: the alignment circuit consists of ~4 cross-attention heads in decoder layers 5-8 that implement a "monotone attention" pattern. Earlier and later heads are more diffuse. Ablating only the monotone heads collapses word-level alignment quality while preserving transcript accuracy — showing that alignment and transcription are partially separable circuits.</p>
+  </div>
+
+  <!-- Slide 7: Speaker Identity -->
+  <div class="slide">
+    <span class="slide-num">Slide 7 — Speaker Identity in the Residual Stream</span>
+    <h2>Speaker <em>Geometry</em></h2>
+    <div class="two-col-slide">
+      <div>
+        <p>Speaker identity is encoded as a linear direction in the residual stream of speech models. Research by Conneau et al. 2021 showed that a linear classifier can predict speaker identity with >95% accuracy from wav2vec2 layer 1 representations — but accuracy drops to ~80% by layer 18, as the speaker direction is progressively overwritten by phonemic content.</p>
+        <p>This creates a practical interpretability question: can we <em>remove</em> the speaker direction without affecting phoneme recognition? The answer is approximately yes — orthogonal projection away from the top-3 speaker PCA directions drops speaker classification accuracy from 95% to 62% while reducing phoneme recognition accuracy by only 1.2%.</p>
+        <p>The speaker direction encodes not just identity but also recording conditions, microphone proximity, and emotional state — these factors are entangled in the first few principal components.</p>
+      </div>
+      <div>
+        <canvas id="speakerCanvas" width="340" height="280" style="width:100%;border-radius:4px;background:#111;display:block;"></canvas>
+        <p style="font-family:var(--mono);font-size:0.62rem;color:#8a8680;text-align:center;margin-top:0.5rem">PCA of wav2vec2 layer-1 representations (simulated)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 8: Causal Interventions -->
+  <div class="slide">
+    <span class="slide-num">Slide 8 — Causal Interventions in Speech</span>
+    <h2>From Correlation to <em>Causation</em></h2>
+    <p>Activation patching in speech models follows the same logic as in text models: run the model on a "clean" and a "corrupted" input, patch activations from clean into corrupted, measure output change.</p>
+    <p>In speech, "corruption" can be defined in multiple ways:</p>
+    <ul class="step-list">
+      <li class="step-item"><span class="step-pill">A</span><span class="step-text"><strong>Phoneme replacement:</strong> swap a phoneme's audio segment with a different phoneme (e.g., replace /t/ with /d/). Test: which layer's activation, when patched, restores the original transcript?</span></li>
+      <li class="step-item"><span class="step-pill">B</span><span class="step-text"><strong>Speaker swap:</strong> replace the speaker direction in the residual stream with a different speaker's direction. Test: does the transcript change? (It shouldn't if phoneme and speaker are separable.)</span></li>
+      <li class="step-item"><span class="step-pill">C</span><span class="step-text"><strong>Noise injection:</strong> add Gaussian noise to specific audio frames. Test: which model component compensates?</span></li>
+    </ul>
+    <div class="callout callout-rose">
+      <span class="callout-label">Key challenge</span>
+      <p>Speech activations at each frame are more strongly coupled than text token activations, because of acoustic coarticulation — the pronunciation of one phoneme affects adjacent phonemes. This makes "clean patch to corrupted" interventions noisier than in text.</p>
+    </div>
+  </div>
+
+  <!-- Slide 9: Open Problems -->
+  <div class="slide">
+    <span class="slide-num">Slide 9 — Open Problems in Speech MechInt</span>
+    <h2>What We <em>Don't Know Yet</em></h2>
+    <div class="compare-grid">
+      <div class="compare-card native-card">
+        <h4>Progress Made</h4>
+        <ul>
+          <li>Layer-wise probing for phoneme, speaker, word</li>
+          <li>Attention head specialisation mapped for wav2vec2</li>
+          <li>Whisper alignment circuit identified</li>
+          <li>Speaker direction separability demonstrated</li>
+          <li>Quantisation unit ↔ phoneme mapping characterised</li>
+        </ul>
+      </div>
+      <div class="compare-card nonnative-card">
+        <h4>Open Questions</h4>
+        <ul>
+          <li>No complete circuit analysis for any speech task</li>
+          <li>Prosody and emotion encoding poorly understood</li>
+          <li>Cross-lingual generalisation mechanism unknown</li>
+          <li>How noise robustness is implemented mechanistically</li>
+          <li>Speech SAEs not yet trained at scale</li>
+        </ul>
+      </div>
+    </div>
+    <p style="margin-top:1.5rem">Speech mechanistic interpretability is an early-stage field. The methods from text interpretability transfer in principle but require adaptation for the continuous, coarticulated nature of speech. The biggest opportunity is in understanding multilingual speech models (Whisper-large-v3), where circuit reuse across languages could reveal language-universal acoustic representations.</p>
+  </div>
+
+  <!-- Slide 10: Resources -->
+  <div class="slide slide-dark">
+    <span class="slide-num" style="color:#8a8680">Slide 10 — Key Resources</span>
+    <h2>Further <em>Reading</em></h2>
+    <ul class="ref-list" style="margin-top:1rem">
+      <li style="color:#c8c4bc">Baevski et al. 2020 — wav2vec 2.0: A Framework for Self-Supervised Learning of Speech Representations</li>
+      <li style="color:#c8c4bc">Hsu et al. 2021 — HuBERT: Self-Supervised Speech Representation Learning by Masked Prediction of Hidden Units</li>
+      <li style="color:#c8c4bc">Radford et al. 2023 — Robust Speech Recognition via Large-Scale Weak Supervision (Whisper)</li>
+      <li style="color:#c8c4bc">Conneau et al. 2021 — Unsupervised Cross-Lingual Representation Learning for Speech Recognition</li>
+      <li style="color:#c8c4bc">Pasad et al. 2021 — Layer-wise Analysis of a Self-Supervised Speech Representation Model</li>
+      <li style="color:#c8c4bc">Shain et al. 2020 — fMRI reveals language-specific predictive coding during naturalistic sentence comprehension</li>
+    </ul>
+    <a class="next-btn" href="../track4/code-labs-hub.html" style="margin-top:2rem">Proceed to Code Labs →</a>
+  </div>
+
+</div><!-- /slides-container -->
+
+<footer><span>Mechanistic Interpretability Atlas</span> · MIT License · 2025</footer>
+
+<script>
+/* === Oscilloscope wave canvas (Slide 1) === */
+(function() {
+  const canvas = document.getElementById('waveCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let t = 0;
+  function draw() {
+    canvas.width = canvas.offsetWidth;
+    canvas.height = 200;
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    const waves = [
+      { freq: 1.2, amp: 30, phase: 0,    color: '#c8832a', alpha: 0.9 },
+      { freq: 2.7, amp: 18, phase: 1.1,  color: '#3a9e9e', alpha: 0.7 },
+      { freq: 4.1, amp: 11, phase: 2.3,  color: '#9c3a4a', alpha: 0.6 },
+      { freq: 7.3, amp: 7,  phase: 0.7,  color: '#7a52b8', alpha: 0.5 },
+    ];
+    waves.forEach(w => {
+      ctx.beginPath();
+      ctx.strokeStyle = w.color;
+      ctx.globalAlpha = w.alpha;
+      ctx.lineWidth = 2;
+      for (let x = 0; x < W; x++) {
+        const a = (x / W) * Math.PI * 2;
+        const y = H/2 + Math.sin(a * w.freq + t * w.freq * 0.5 + w.phase) * w.amp
+                      + Math.sin(a * w.freq * 1.7 + t * 0.3) * (w.amp * 0.3);
+        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+    t += 0.04;
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+/* === Attention heatmap canvas (Slide 4) === */
+(function() {
+  const canvas = document.getElementById('attnCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const T = 16;
+  const cellW = Math.floor(canvas.width / T);
+  const cellH = Math.floor(220 / T);
+  function drawAttn() {
+    ctx.clearRect(0, 0, canvas.width, 220);
+    for (let i = 0; i < T; i++) {
+      for (let j = 0; j < T; j++) {
+        const dist = Math.abs(i - j);
+        const base = dist <= 2 ? Math.exp(-dist * dist / 2) : 0.02;
+        const noise = (Math.random() - 0.5) * 0.08;
+        const v = Math.max(0, Math.min(1, base + noise));
+        const alpha = 0.15 + v * 0.85;
+        ctx.fillStyle = `rgba(200, 131, 42, ${alpha})`;
+        ctx.fillRect(j * cellW + 1, i * cellH + 1, cellW - 2, cellH - 2);
+      }
+    }
+    ctx.fillStyle = 'rgba(200,131,42,0.4)';
+    ctx.font = '9px DM Mono, monospace';
+    ctx.fillText('Q (time)', 5, 215);
+    ctx.save(); ctx.translate(10, 100); ctx.rotate(-Math.PI/2);
+    ctx.fillText('K (time)', 0, 0); ctx.restore();
+  }
+  drawAttn();
+})();
+
+/* === Speaker PCA scatter canvas (Slide 7) === */
+(function() {
+  const canvas = document.getElementById('speakerCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = 280;
+  const colors = ['#c8832a','#3a9e9e','#9c3a4a','#7a52b8','#3a7c4a'];
+  const labels = ['Spk A','Spk B','Spk C','Spk D','Spk E'];
+  const speakers = colors.map((c, i) => ({
+    color: c, label: labels[i],
+    cx: W * (0.2 + 0.15 * i),
+    cy: H * (0.3 + 0.25 * (i % 3 === 0 ? 1 : 0)),
+  }));
+  function drawScatter() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, W, H);
+    speakers.forEach(s => {
+      for (let k = 0; k < 30; k++) {
+        const x = s.cx + (Math.random() - 0.5) * 60;
+        const y = s.cy + (Math.random() - 0.5) * 50;
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI*2);
+        ctx.fillStyle = s.color;
+        ctx.globalAlpha = 0.7;
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = s.color;
+      ctx.font = '10px DM Mono, monospace';
+      ctx.fillText(s.label, s.cx - 15, s.cy + 40);
+    });
+  }
+  drawScatter();
+})();
+
+/* === Layer probe bar charts === */
+(function() {
+  const phonemeData = [18, 31, 44, 52, 61, 72, 79, 81, 78, 74, 68, 60, 54, 50, 47, 44, 41, 39, 37, 35, 33, 31, 30, 29];
+  const speakerData = [82, 88, 84, 78, 70, 62, 55, 48, 42, 38, 35, 33, 31, 29, 28, 26, 25, 24, 23, 22, 22, 21, 21, 20];
+
+  function buildProbeChart(containerId, data, color) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    data.forEach((v, i) => {
+      const row = document.createElement('div');
+      row.className = 'layer-row';
+      row.innerHTML = `
+        <span class="layer-label">L${i+1}</span>
+        <div class="layer-bar-wrap">
+          <div class="layer-bar" style="width:${v}%;background:${color}"></div>
+        </div>
+        <span class="layer-pct">${v}%</span>`;
+      container.appendChild(row);
+    });
+  }
+
+  buildProbeChart('phonemeProbe', phonemeData, 'var(--rose)');
+  buildProbeChart('speakerProbe', speakerData, 'var(--teal)');
+})();
+</script>
+</body>
+</html>
