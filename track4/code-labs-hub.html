@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Code Labs Hub — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+  <style>
+    .hub-wrapper { max-width: 1000px; margin: 0 auto; padding: 6rem 2rem 8rem; }
+    .lab-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 1.8rem; margin-top: 2rem; }
+    .lab-card { background: var(--card); border-radius: 6px; padding: 2rem; border-top: 4px solid var(--violet); position: relative; }
+    .lab-num { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.18em; color: var(--violet); text-transform: uppercase; display: block; margin-bottom: 0.8rem; }
+    .lab-card h3 { font-family: var(--display); font-size: 1.25rem; font-weight: 400; margin-bottom: 0.6rem; }
+    .lab-card p { font-family: var(--body); font-weight: 300; font-size: 0.9rem; line-height: 1.7; color: #4a4840; margin-bottom: 1.2rem; }
+    .lab-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.2rem; }
+    .lab-tag { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.1em; padding: 0.2rem 0.6rem; border-radius: 2px; background: var(--violet-pale); color: var(--violet); }
+    .lab-link { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--violet); text-decoration: none; border-bottom: 1px solid var(--violet); padding-bottom: 0.1rem; transition: opacity 0.2s; }
+    .lab-link:hover { opacity: 0.7; }
+    .prereq-box { background: var(--sand); border-radius: 4px; padding: 1.5rem; margin-top: 3rem; }
+    .prereq-box h3 { font-family: var(--display); font-weight: 400; font-size: 1.1rem; margin-bottom: 1rem; }
+    .prereq-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 0.8rem; }
+    .prereq-item { font-family: var(--mono); font-size: 0.72rem; color: #4a4840; display: flex; align-items: center; gap: 0.5rem; }
+    .prereq-item::before { content: '✓'; color: var(--violet); font-size: 0.85rem; }
+    .setup-block { background: #1a1a1a; color: #e8e4dc; font-family: var(--mono); font-size: 0.8rem; padding: 1.5rem; border-radius: 4px; margin-top: 1.5rem; line-height: 1.7; white-space: pre; overflow-x: auto; }
+  </style>
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="../index.html">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../track1/tokenization.html">Foundations</a></li>
+      <li><a href="../track2/attention-mechanics.html">Architecture</a></li>
+      <li><a href="../track3/hidden-states.html">Interpretability</a></li>
+      <li><a href="code-labs-hub.html">Code Labs</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="hub-wrapper">
+  <div class="breadcrumb">
+    <a href="../index.html">Home</a><span>›</span>
+    Code Labs Hub
+  </div>
+
+  <div style="max-width:680px">
+    <span style="font-family:var(--mono);font-size:0.7rem;letter-spacing:0.18em;color:var(--violet);text-transform:uppercase;display:block;margin-bottom:1rem">Track 4 · Code Labs</span>
+    <h1 style="font-family:var(--display);font-size:clamp(2rem,4vw,3rem);font-weight:400;line-height:1.1;margin-bottom:1rem">Hands-on <em style="font-style:italic;color:var(--violet)">Code Labs</em></h1>
+    <p style="font-family:var(--body);font-weight:300;font-size:1.05rem;line-height:1.8;color:#4a4840">Six complete, self-contained code walkthroughs. Each lab runs in a standard Python environment with open-source models from Hugging Face. Every lab includes setup instructions, step-by-step code, expected outputs, and stretch goals.</p>
+  </div>
+
+  <div class="lab-grid">
+    <div class="lab-card">
+      <span class="lab-num">Lab 01</span>
+      <h3>Tokenization Walkthrough</h3>
+      <p>Hands-on exploration of BPE, WordPiece, and SentencePiece tokenizers. Manually trace merge rules, compare vocabularies, and measure tokenization fragmentation.</p>
+      <div class="lab-tags">
+        <span class="lab-tag">GPT-2</span>
+        <span class="lab-tag">BERT</span>
+        <span class="lab-tag">transformers</span>
+      </div>
+      <a class="lab-link" href="tokenization-walkthrough.html">Open Lab →</a>
+    </div>
+
+    <div class="lab-card">
+      <span class="lab-num">Lab 02</span>
+      <h3>Probing Walkthrough</h3>
+      <p>Train linear probes on hidden states from BERT and GPT-2. Measure what linguistic properties are linearly decodable at each layer. Build a layer-vs-accuracy heatmap.</p>
+      <div class="lab-tags">
+        <span class="lab-tag">BERT</span>
+        <span class="lab-tag">sklearn</span>
+        <span class="lab-tag">probing</span>
+      </div>
+      <a class="lab-link" href="probing-walkthrough.html">Open Lab →</a>
+    </div>
+
+    <div class="lab-card">
+      <span class="lab-num">Lab 03</span>
+      <h3>Patching Walkthrough</h3>
+      <p>Implement activation patching from scratch on GPT-2. Reproduce a simplified version of the IOI causal tracing experiment. Identify which layers causally store factual knowledge.</p>
+      <div class="lab-tags">
+        <span class="lab-tag">GPT-2</span>
+        <span class="lab-tag">causal tracing</span>
+        <span class="lab-tag">hooks</span>
+      </div>
+      <a class="lab-link" href="patching-walkthrough.html">Open Lab →</a>
+    </div>
+
+    <div class="lab-card">
+      <span class="lab-num">Lab 04</span>
+      <h3>Speech Walkthrough</h3>
+      <p>Extract and visualise representations from wav2vec2 and Whisper. Run layer-wise probing for phoneme identity. Visualise cross-attention alignment in Whisper.</p>
+      <div class="lab-tags">
+        <span class="lab-tag">wav2vec2</span>
+        <span class="lab-tag">Whisper</span>
+        <span class="lab-tag">librosa</span>
+      </div>
+      <a class="lab-link" href="speech-walkthrough.html">Open Lab →</a>
+    </div>
+
+    <div class="lab-card">
+      <span class="lab-num">Lab 05</span>
+      <h3>SAE Walkthrough</h3>
+      <p>Train a minimal Sparse Autoencoder on GPT-2 MLP activations. Recover interpretable features. Visualise dead features, sparsity, and reconstruction quality.</p>
+      <div class="lab-tags">
+        <span class="lab-tag">GPT-2</span>
+        <span class="lab-tag">SAE</span>
+        <span class="lab-tag">superposition</span>
+      </div>
+      <a class="lab-link" href="sae-walkthrough.html">Open Lab →</a>
+    </div>
+
+    <div class="lab-card" style="border-top-color:var(--rule);opacity:0.6">
+      <span class="lab-num" style="color:#8a8680">Lab 06</span>
+      <h3>Circuit Discovery (Coming Soon)</h3>
+      <p>Automated circuit discovery via ACDC on a 2-layer transformer trained on a synthetic task. Full path patching sweep.</p>
+      <div class="lab-tags">
+        <span class="lab-tag" style="background:var(--sand);color:#8a8680">ACDC</span>
+        <span class="lab-tag" style="background:var(--sand);color:#8a8680">circuits</span>
+      </div>
+      <span style="font-family:var(--mono);font-size:0.72rem;color:#8a8680">Coming soon</span>
+    </div>
+  </div>
+
+  <!-- Prerequisites -->
+  <div class="prereq-box">
+    <h3>Environment Setup</h3>
+    <p style="font-family:var(--body);font-weight:300;font-size:0.9rem;color:#4a4840;margin-bottom:1rem">All labs require Python 3.9+ and the following packages. Install once and all labs will work.</p>
+    <div class="setup-block">pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+pip install transformers datasets accelerate
+pip install scikit-learn matplotlib numpy librosa
+pip install soundfile tqdm</div>
+    <p style="font-family:var(--mono);font-size:0.72rem;color:#8a8680;margin-top:1rem">GPU optional but recommended for speech labs. All text labs run comfortably on CPU in &lt;5 minutes.</p>
+    <h3 style="font-family:var(--display);font-weight:400;font-size:1.1rem;margin:1.5rem 0 0.8rem">Prerequisites per Lab</h3>
+    <div class="prereq-grid">
+      <span class="prereq-item">Lab 01: Track 1 Foundations</span>
+      <span class="prereq-item">Lab 02: Embeddings + Layers</span>
+      <span class="prereq-item">Lab 03: Activation Patching (T3)</span>
+      <span class="prereq-item">Lab 04: Track 3 Speech Slides</span>
+      <span class="prereq-item">Lab 05: Superposition (T3)</span>
+      <span class="prereq-item">Lab 06: Circuits (T3)</span>
+    </div>
+  </div>
+</div>
+
+<footer><span>Mechanistic Interpretability Atlas</span> · MIT License · 2025</footer>
+</body>
+</html>
