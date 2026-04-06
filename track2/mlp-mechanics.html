@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MLP Mechanics — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,600&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../index.html">Home</a></li>
+      <li><a href="../index.html#tracks">Tracks</a></li>
+      <li><a href="../index.html#about">About</a></li>
+    </ul>
+  </div>
+</nav>
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">In This Lesson</span>
+    <ul class="sidebar-nav">
+      <li><a href="#metadata">Metadata</a></li>
+      <li><a href="#outcomes">Learning Outcomes</a></li>
+      <li><a href="#setup">Conceptual Setup</a></li>
+      <li><a href="#intuition">Intuition First</a></li>
+      <li><a href="#technical">Technical Core</a></li>
+      <li><a href="#worked-example">Worked Example</a></li>
+      <li><a href="#mechint">Mech. Interpretation</a></li>
+      <li><a href="#exercise">Hands-on Exercise</a></li>
+      <li><a href="#artifact">Real Model Artifact</a></li>
+      <li><a href="#assessment">Assessment Check</a></li>
+      <li><a href="#references">References</a></li>
+      <li><a href="#next">Next Step</a></li>
+    </ul>
+  </aside>
+  <main class="lesson-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span>›</span>
+      <a href="../index.html#tracks">Track 2: Architecture</a>
+      <span>›</span>
+      MLP Mechanics
+    </div>
+    <!-- ═══════════════════════════════════════════════════ METADATA -->
+    <section id="metadata" class="lesson-section">
+      <h2>MLP Mechanics</h2>
+      <p style="font-family:var(--mono);font-size:0.8rem;color:#8a8680;margin-bottom:1.5rem;">Lesson 2 of 3 · Track 2: Architecture</p>
+      <div class="meta-box">
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Track</div>
+          <div style="font-weight:400;">Track 2: Architecture</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Lesson</div>
+          <div style="font-weight:400;">#2 of 3</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Prerequisites</div>
+          <div style="font-weight:400;">Track 2, Lesson 1: Attention Mechanics</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Est. Time</div>
+          <div style="font-weight:400;">60 minutes</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Modalities</div>
+          <div style="font-weight:400;">Text · Vision · Speech</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Accent</div>
+          <div style="font-weight:400;color:var(--teal);">Teal — Architecture</div>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ OUTCOMES -->
+    <section id="outcomes" class="lesson-section">
+      <h2>Learning Outcomes</h2>
+      <p>This lesson examines the feedforward MLP block — the layer responsible for storing and retrieving factual knowledge. You will understand why MLPs are hard to interpret at the neuron level (polysemanticity), what the key-value memory interpretation reveals, and how sparse autoencoders provide a path toward monosemantic decomposition.</p>
+      <ul class="outcomes-list">
+        <li>Write out the standard MLP computation (W_in, activation, W_out) and the SwiGLU variant used in LLaMA, and explain the role of each component.</li>
+        <li>Explain the key-value memory interpretation of MLP layers (Geva et al. 2021): rows of W_in as keys, rows of W_out as values, and the GELU activation as a gating mechanism.</li>
+        <li>Define polysemanticity and superposition, explain why they arise in over-complete representations, and describe the relationship between model capacity, sparsity, and the degree of superposition.</li>
+        <li>Compare GELU, ReLU, and SwiGLU in terms of smoothness, dead neuron risk, gradient flow, and interpretability implications.</li>
+        <li>Use a forward hook in PyTorch to extract MLP neuron activations for a specific layer and token position.</li>
+        <li>Identify top-activating examples for a given neuron and interpret what (if anything) this reveals about the neuron's function.</li>
+        <li>Explain why Sparse Autoencoders (SAEs) are proposed as a solution to polysemanticity and describe what a "monosemantic feature" looks like in an SAE decomposition.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ SETUP -->
+    <section id="setup" class="lesson-section">
+      <h2>Conceptual Setup</h2>
+      <p>The MLP (Multi-Layer Perceptron) block in each transformer layer is often described as the "memory" of the network. While attention routes information between positions, the MLP transforms the information at a single position using a two-layer feedforward network with a nonlinear activation. The MLP is followed by a residual connection, so like attention, it adds a delta (Δ_mlp) to the residual stream rather than replacing it.</p>
+      <p>Understanding MLPs is crucial for mechanistic interpretability for two reasons that pull in opposite directions:</p>
+      <ul>
+        <li><strong>MLPs store factual knowledge.</strong> Geva et al. 2021 showed that specific MLP neurons can be linked to factual associations (country → capital, person → profession). Suppressing those neurons reduces the probability of the correct factual completion. This makes MLPs a tractable target for knowledge localization and editing.</li>
+        <li><strong>MLPs are hard to interpret at the neuron level.</strong> The same neuron activates for many unrelated concepts (polysemanticity). A neuron that fires for "Paris" also fires for "pizza" and "impressionist painting." This is not noise — it is a consequence of the geometry of high-dimensional representations (superposition). Neuron-level interpretation is therefore unreliable without additional structure.</li>
+      </ul>
+      <div class="callout callout-teal">
+        <span class="callout-label">The Interpretability Tension</span>
+        <p>MLPs are simultaneously the most knowledge-dense and the least neuron-interpretable component of transformers. The field has responded in two ways: (1) accept polysemanticity and work at the layer level (logit lens, activation patching over MLP outputs); (2) decompose neurons into monosemantic features using Sparse Autoencoders (SAEs). Both approaches are active research directions.</p>
+      </div>
+      <p>The MLP block is architecturally sandwiched between two attention layers in each transformer block. After attention routes information to the current position via the residual stream, the MLP reads from that accumulated representation and writes a transformed delta back. In GPT-2-small: each MLP has d_mlp = 3072 hidden neurons — 4× the residual stream dimension (d = 768). This 4× expansion is a near-universal design choice across transformers.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ INTUITION -->
+    <section id="intuition" class="lesson-section">
+      <h2>Intuition First</h2>
+      <p>Think of the MLP as a <strong>lookup table with a twist</strong>. The table has 3072 entries (neurons). Each entry consists of:</p>
+      <ul>
+        <li>A <strong>key</strong> pattern (a row of W_in): "fire if the input matches this pattern"</li>
+        <li>A <strong>value</strong> (a row of W_out): "if fired, add this vector to the residual stream"</li>
+      </ul>
+      <p>The GELU activation function acts as a <strong>soft gate</strong>: neurons with high pre-activation scores "fire" and contribute their value vectors; neurons with near-zero or negative scores are suppressed. The result is a weighted sum over all 3072 value vectors, weighted by how strongly each key was matched.</p>
+      <div class="callout callout-amber">
+        <span class="callout-label">The Superposition Surprise</span>
+        <p>If the model has 3072 neurons and each neuron stored exactly one concept, it could represent 3072 concepts per layer. But real models store many more concepts than their neuron count — by encoding features as <em>directions</em> in the neuron space, not as individual neurons. A feature is "polysemantically encoded" when multiple neurons activate for it, and a neuron is "polysemantic" when it participates in multiple features. This is superposition: the model sacrifices perfect decodability for representational capacity.</p>
+      </div>
+      <p>The intuition for why polysemanticity is <em>not just a bug</em>: if only 1% of features are active on any given input (sparse activations), then even with polysemantic encoding, the probability of interference between two simultaneously active features is low. The model is betting that conflicting features are unlikely to co-occur. This bet is usually right — in practice, GELU activations in transformer MLPs are highly sparse.</p>
+      <p>The intuition for <strong>SwiGLU</strong> (used in LLaMA, PaLM): instead of one linear projection followed by a nonlinearity, SwiGLU uses two parallel linear projections — one goes through a sigmoid-like gate and the other provides the "content." The elementwise product creates a gating mechanism that is more expressive than GELU alone, with better gradient flow and empirically higher performance at matched parameter counts.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ TECHNICAL -->
+    <section id="technical" class="lesson-section">
+      <h2>Technical Core</h2>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">Standard MLP Computation</h3>
+      <div class="ascii-diagram">Standard MLP (GPT-2 style):
+  h    = GELU( x · W_in  + b_in  )     h ∈ ℝ^{d_mlp}
+  Δ_mlp = h · W_out + b_out             Δ_mlp ∈ ℝ^d
+  Where:
+    x     ∈ ℝ^d          residual stream (after LayerNorm)
+    W_in  ∈ ℝ^{d × d_mlp}    GPT-2: (768 × 3072)
+    W_out ∈ ℝ^{d_mlp × d}    GPT-2: (3072 × 768)
+    d_mlp = 4d = 3072 (GPT-2-small)
+SwiGLU (LLaMA style):
+  gate   = SiLU( x · W_gate )          gate ∈ ℝ^{d_mlp}
+  up     = x · W_up                    up   ∈ ℝ^{d_mlp}
+  Δ_mlp  = (gate ⊙ up) · W_down        ⊙ = elementwise product
+  Parameters: 3 weight matrices instead of 2
+  Benefit: richer gating, better gradient flow, ~10% better perplexity</div>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">Residual Stream Diagram</h3>
+      <div class="ascii-diagram">Residual Stream  x ∈ ℝ^768
+        │
+   LayerNorm  →  x_norm
+        │
+   W_in ∈ ℝ^(768 × 3072)
+        │
+        ↓
+   pre-activations  ∈ ℝ^3072    (768 → 3072, 4× expansion)
+        │
+   GELU(·)  [applied elementwise]
+        │
+        ↓
+   h ∈ ℝ^3072     ← neuron activations
+        │             (most near zero due to sparsity)
+        │  W_out ∈ ℝ^(3072 × 768)
+        ↓
+   Δ_mlp ∈ ℝ^768   (3072 → 768, 4× compression)
+        │
+        + x  (residual addition)
+        │
+   x_out ∈ ℝ^768  →  next layer input</div>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">Key-Value Memory Interpretation</h3>
+      <p>Geva et al. 2021 reframe the MLP as a key-value memory store:</p>
+      <ul>
+        <li><strong>Key i</strong> = row i of W_in (dimension d = 768). The pre-activation for neuron i is <code>x · W_in[:, i]</code> — a dot product measuring how much the input matches key i.</li>
+        <li><strong>Gate</strong> = GELU applied to the pre-activation. Neurons with high key-match score "fire"; others are suppressed.</li>
+        <li><strong>Value i</strong> = row i of W_out (dimension d = 768). When neuron i fires, it contributes <code>h_i · W_out[i, :]</code> to the output delta.</li>
+        <li><strong>Output</strong> = Σ_i h_i · value_i = weighted sum of value vectors (like soft retrieval from the memory).</li>
+      </ul>
+      <div class="callout callout-teal">
+        <span class="callout-label">Mechanistic Implication</span>
+        <p>Under the key-value interpretation, "facts are stored in MLP weights" means: for the fact "France → Paris," there is a neuron (or small set of neurons) whose key activates when the input encodes "country name that is France" and whose value vector, when added to the residual stream, boosts the probability of "Paris" at the output. Locating and editing these specific neurons is the goal of model editing research (ROME, MEMIT).</p>
+      </div>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">Activation Function Comparison</h3>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Activation</th>
+            <th>Formula</th>
+            <th>Smooth?</th>
+            <th>Dead Neurons?</th>
+            <th>Used By</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ReLU</td>
+            <td>max(0, x)</td>
+            <td>No (kink at 0)</td>
+            <td>Yes — neurons stuck at 0</td>
+            <td>Early transformers, BERT</td>
+          </tr>
+          <tr>
+            <td>GELU</td>
+            <td>x · Φ(x), Φ = Gaussian CDF</td>
+            <td>Yes</td>
+            <td>Rare (smooth near 0)</td>
+            <td>GPT-2, GPT-3, BERT variants</td>
+          </tr>
+          <tr>
+            <td>SwiGLU</td>
+            <td>(x W_gate ⊙ SiLU(x W_gate)) W_down</td>
+            <td>Yes</td>
+            <td>Very rare</td>
+            <td>LLaMA, PaLM, Gemma</td>
+          </tr>
+          <tr>
+            <td>Sigmoid</td>
+            <td>1 / (1 + e^{−x})</td>
+            <td>Yes</td>
+            <td>Vanishing gradient</td>
+            <td>Legacy; not used in modern LLMs</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">Privileged vs. Non-Privileged Basis</h3>
+      <p>A critical concept for interpreting MLP neurons:</p>
+      <ul>
+        <li><strong>Neurons are in a privileged basis:</strong> GELU is applied elementwise, meaning each neuron dimension is treated distinctly by the nonlinearity. The activation h_i corresponds to a specific physical neuron that can be directly inspected and ablated.</li>
+        <li><strong>Features are in a non-privileged basis:</strong> A semantic feature (e.g., "capital city") may not align with any single neuron axis. It can point in any direction in the 3072-dimensional space, activating multiple neurons simultaneously.</li>
+      </ul>
+      <div class="callout callout-violet">
+        <span class="callout-label">Superposition Theorem (Elhage et al. 2022)</span>
+        <p>A model with d dimensions representing n features, where n &gt;&gt; d, can encode all features while keeping interference below a tolerable level if features are sparse (rarely co-active) and nearly orthogonal (anti-podal pairs for binary features, random directions for independent features). The trade-off: with sparsity fraction s, a d-dimensional model can represent up to approximately d / s features without unacceptable interference.</p>
+      </div>
+      <h3 style="font-family:var(--display);font-weight:400;font-size:1.2rem;margin:1.5rem 0 0.8rem;">Sparse Autoencoders (SAE) as a Solution</h3>
+      <p>An SAE is trained to reconstruct MLP activations h with a sparse bottleneck:</p>
+      <div class="ascii-diagram">Input:   h ∈ ℝ^3072    (MLP hidden activations)
+         ↓  W_enc ∈ ℝ^{3072 × d_sae}   (encoder, d_sae >> 3072)
+Pre-act: z ∈ ℝ^{d_sae}
+         ↓  ReLU
+Sparse:  f = ReLU(z)     sparsity enforced via L1 penalty
+         ↓  W_dec ∈ ℝ^{d_sae × 3072}  (decoder, columns are "feature directions")
+Recon:   ĥ ∈ ℝ^3072
+Loss: ||h - ĥ||² + λ ||f||₁
+Interpretation:
+  Each active dimension of f corresponds to one "monosemantic feature"
+  The corresponding column of W_dec is the feature direction
+  d_sae is typically 4–64× larger than d_mlp</div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ WORKED EXAMPLE -->
+    <section id="worked-example" class="lesson-section">
+      <h2>Worked Example</h2>
+      <p>We extract MLP neuron activations from layer 9 of GPT-2 for the sentence "The capital of France is Paris" and identify the top-activated neurons at the "Paris" token position. This is a direct test of the key-value memory hypothesis.</p>
+      <ol class="step-list">
+        <li class="step-item">
+          <span class="step-pill">01</span>
+          <span class="step-text">Register a forward hook on the GELU activation layer of layer 9. This captures the hidden state h ∈ ℝ^{T × 3072} — the neuron activations after GELU, before W_out.</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">02</span>
+          <span class="step-text">Run the model on the target sentence. The hook fires and stores the activation tensor.</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">03</span>
+          <span class="step-text">Find the position of "Paris" in the tokenized sequence. Extract the neuron activation vector at that position: shape (3072,).</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">04</span>
+          <span class="step-text">Use <code>.topk(10)</code> to find the 10 most active neurons. Optionally, project W_out[top_neuron, :] through the unembedding matrix W_U to see which vocabulary tokens those value vectors boost.</span>
+        </li>
+      </ol>
+      <pre class="code-block"><span class="kw">import</span> torch
+<span class="kw">from</span> transformers <span class="kw">import</span> GPT2LMHeadModel, GPT2Tokenizer
+model = GPT2LMHeadModel.from_pretrained(<span class="st">"gpt2"</span>)
+tok = GPT2Tokenizer.from_pretrained(<span class="st">"gpt2"</span>)
+model.eval()
+<span class="cm"># Hook to capture MLP hidden (post-GELU) activations</span>
+activations = {}
+<span class="kw">def</span> <span class="fn">hook_fn</span>(module, input, output):
+    activations[<span class="st">'mlp_hidden'</span>] = output.detach()
+<span class="cm"># Register on layer 9 MLP act (post-GELU activation)</span>
+model.transformer.h[<span class="nu">9</span>].mlp.act.register_forward_hook(hook_fn)
+text = <span class="st">"The capital of France is Paris"</span>
+inputs = tok(text, return_tensors=<span class="st">"pt"</span>)
+token_strings = tok.convert_ids_to_tokens(inputs[<span class="st">"input_ids"</span>][<span class="nu">0</span>])
+<span class="fn">print</span>(<span class="st">"Tokens:"</span>, token_strings)
+<span class="kw">with</span> torch.no_grad():
+    outputs = model(**inputs)
+hidden = activations[<span class="st">'mlp_hidden'</span>][<span class="nu">0</span>]  <span class="cm"># (T, 3072)</span>
+<span class="cm"># Find "Paris" token position</span>
+paris_id = tok.encode(<span class="st">"Paris"</span>)[<span class="nu">0</span>]
+ids = inputs[<span class="st">"input_ids"</span>][<span class="nu">0</span>].tolist()
+paris_pos = ids.index(paris_id)
+<span class="fn">print</span>(<span class="fn">f</span><span class="st">"'Paris' at position {paris_pos}"</span>)
+neuron_acts = hidden[paris_pos]      <span class="cm"># (3072,)</span>
+top10 = neuron_acts.topk(<span class="nu">10</span>)
+<span class="fn">print</span>(<span class="st">"\nTop-10 neurons at 'Paris' position:"</span>)
+<span class="fn">print</span>(<span class="st">f"  Indices: {top10.indices.tolist()}"</span>)
+<span class="fn">print</span>(<span class="st">f"  Values:  {[round(v.item(), 3) for v in top10.values]}"</span>)
+<span class="cm"># Check sparsity: what fraction of 3072 neurons are near-zero?</span>
+threshold = <span class="nu">0.1</span>
+active_frac = (neuron_acts.abs() > threshold).float().mean().item()
+<span class="fn">print</span>(<span class="fn">f</span><span class="st">"\nFraction of neurons active (|h| > {threshold}): {active_frac:.3f}"</span>)
+<span class="fn">print</span>(<span class="fn">f</span><span class="st">"(~{int(active_frac * 3072)} of 3072 neurons are active)"</span>)
+<span class="cm"># Project top neuron's value vector through unembedding to see what it boosts</span>
+W_out = model.transformer.h[<span class="nu">9</span>].mlp.c_proj.weight  <span class="cm"># (768, 3072) in GPT-2</span>
+W_U = model.lm_head.weight                            <span class="cm"># (50257, 768)</span>
+ln_f = model.transformer.ln_f
+top_neuron_idx = top10.indices[<span class="nu">0</span>].item()
+value_vec = W_out[:, top_neuron_idx]                  <span class="cm"># (768,) value vector</span>
+logit_boost = (value_vec @ W_U.T)                     <span class="cm"># (50257,)</span>
+top_boosted = logit_boost.topk(<span class="nu">5</span>)
+boosted_tokens = [tok.decode([i]) <span class="kw">for</span> i <span class="kw">in</span> top_boosted.indices]
+<span class="fn">print</span>(<span class="fn">f</span><span class="st">"\nNeuron {top_neuron_idx} value vector boosts: {boosted_tokens}"</span>)
+<span class="cm"># Expect: tokens related to France/Paris/geography if this is a "factual neuron"</span></pre>
+      <p>Typical findings: at the "Paris" position in layer 9, 5–15% of neurons show meaningful activation (rest are near-zero, confirming sparsity). The top neuron's value vector, when projected through W_U, often boosts tokens related to the input context — French place names, European capitals, or geographic terms.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ MECHINT -->
+    <section id="mechint" class="lesson-section">
+      <h2>Mechanistic Interpretation Layer</h2>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Text: MLP as Factual Memory</h3>
+      <p><strong>What is measured:</strong> Neuron activation amplitude for specific semantic inputs. The target is to find neurons that activate specifically for a class of inputs (e.g., country names) and whose value vectors boost the associated facts (e.g., capital cities).</p>
+      <p><strong>Geva et al. 2021's finding:</strong> In GPT-2 and T5, specific MLP neurons can be linked to factual triplets. For example, layer 9 neurons that fire for country names have value vectors that boost capital city tokens. Suppressing these neurons (zeroing their activation) reduces the probability of the correct factual completion by an average of 0.34 log-probability points per suppressed neuron.</p>
+      <p><strong>Layerwise structure:</strong> Lower MLP layers (1–5) tend to store syntactic and morphological patterns. Middle layers (5–9) store factual associations. Upper layers (9–12) store task-specific and stylistic patterns. This is a soft gradient, not a sharp boundary.</p>
+      <p><strong>Caution:</strong> "One neuron = one fact" is an oversimplification. Multiple neurons contribute to each factual prediction, and each neuron contributes to multiple facts. The correct picture is: facts are distributed across a small cluster of neurons in a specific layer range. Don't claim a neuron "stores" a fact — claim a neuron "participates in encoding" the fact. Over-claiming neuron-level specificity is a common error in MLP interpretability papers.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Vision: MLP Neurons in Vision Transformers</h3>
+      <p><strong>What is measured:</strong> Neuron activation as a function of input patch content in ViT-B/16. Feature visualization (finding the input patch that maximally activates a neuron) reveals what visual pattern each neuron detects.</p>
+      <p><strong>Research findings:</strong> MLP neurons in ViT's later layers respond to specific visual features: texture gradients, color patterns, object part shapes. Some neurons are curve detectors — analogous to those found in convolutional networks (InceptionNet, AlexNet). Neurons in early ViT layers respond to low-level patterns (edges, colors); neurons in late layers respond to object-level features (faces, textures).</p>
+      <p><strong>Comparison to text MLPs:</strong> ViT MLP neurons may be more monosemantic than LLM neurons. Hypothesis: visual features are more naturally sparse (a specific texture appears only in specific image regions), whereas linguistic features are more dense (a grammar rule applies broadly). Lower natural sparsity may lead to higher polysemanticity in text models.</p>
+      <p><strong>Caution:</strong> Feature visualization (maximum-activating inputs, usually found via gradient ascent on the input image) can be misleading. The neuron's behavior on a synthetic maximizing input may not generalize to natural images. Always validate with a large corpus of held-out natural images and check that the neuron's activation is consistently high for the claimed category.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Speech: MLP Neurons in wav2vec2 and Whisper</h3>
+      <p><strong>What is measured:</strong> Neuron activation as a function of spectrotemporal input patterns in acoustic transformer models (wav2vec2, Whisper).</p>
+      <p><strong>Layerwise findings:</strong></p>
+      <ul>
+        <li><strong>Lower layers:</strong> Neurons respond to formant frequency ranges (F1, F2) — the acoustic signature of vowels. These neurons are analogous to frequency-selective filters.</li>
+        <li><strong>Middle layers:</strong> Neurons show selectivity for phoneme categories: voicing (voiced /b/ vs. voiceless /p/), place of articulation (bilabial vs. alveolar). This is the speech analogue of "word-level neurons" in text models.</li>
+        <li><strong>Upper layers (Whisper):</strong> Neurons in upper layers respond to word-level features or even speaker-identity features — the model has built a high-level representation that goes beyond phonetics.</li>
+      </ul>
+      <p><strong>Caution:</strong> Speech features are highly coarticulated — a phoneme's acoustic realization depends heavily on neighboring phonemes. A neuron selective for /p/ in isolation may not activate for /p/ in natural connected speech (where it is influenced by the following vowel and preceding consonant). Interpretability results from isolated phonemes should be validated on running speech before drawing strong conclusions.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ EXERCISE -->
+    <section id="exercise" class="lesson-section">
+      <h2>Hands-on Exercise</h2>
+      <div class="exercise-box">
+        <h3>Exercise: Find and Analyze Polysemantic Neurons</h3>
+        <p><strong>Task:</strong> Find an MLP neuron that activates for multiple unrelated semantic categories, demonstrating polysemanticity in GPT-2.</p>
+        <ol class="step-list">
+          <li class="step-item">
+            <span class="step-pill">01</span>
+            <span class="step-text"><strong>Setup:</strong> Load GPT-2. Register a forward hook on <code>model.transformer.h[6].mlp.act</code> to capture layer 6 MLP activations. Write a function <code>get_neuron_act(text, neuron_idx)</code> that returns the activation of neuron <code>neuron_idx</code> at the last meaningful token position.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">02</span>
+            <span class="step-text"><strong>Build a diverse corpus:</strong> Create 20 sentences in 5 categories (4 sentences each): (a) food — "I ordered a plate of spaghetti"; (b) geography — "Mount Fuji is located in Japan"; (c) sports — "The goalkeeper saved the penalty"; (d) science — "The nucleus contains protons and neutrons"; (e) names — "Elizabeth joined the company last year."</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">03</span>
+            <span class="step-text"><strong>Measure neuron 314:</strong> For each sentence, record the activation of neuron 314 at the final content token. Compute the mean activation per category.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">04</span>
+            <span class="step-text"><strong>Cross-category test:</strong> Check whether neuron 314 activates above the 75th percentile of its activation distribution for sentences in at least two different categories.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">05</span>
+            <span class="step-text"><strong>Top-activating examples:</strong> Find the 5 sentences (across all 20) that produce the highest activation in neuron 314. Do they share a common property — or are they surprisingly diverse?</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">06</span>
+            <span class="step-text"><strong>Value vector analysis:</strong> Project neuron 314's value vector (row 314 of W_out) through the unembedding matrix. What tokens does this neuron boost? Does this align with the categories of sentences that activate it?</span>
+          </li>
+        </ol>
+        <p><strong>Expected output:</strong> Neuron 314 should activate for at least 2 different semantic categories, with comparable peak activation values. The top-5 activating sentences should come from at least 2 categories.</p>
+        <p><strong>Success criteria:</strong> Identify at least one neuron (neuron 314 or another) with measurably different top-activating categories — mean activation ratio between top and bottom category &lt; 3× (i.e., the neuron is not extremely specialized).</p>
+        <p><strong>Reflection:</strong> Why does polysemanticity arise? What is the relationship between model size and degree of polysemanticity? (Hint: larger models may be less polysemantic per neuron because they have more neurons per parameter — test this hypothesis.)</p>
+        <p><strong>Stretch:</strong> Compare neuron polysemanticity between GPT-2-small (12 layers, 3072 neurons/MLP) and GPT-2-medium (24 layers). Sample 20 neurons from each model's middle layers and compute a "polysemanticity score" = entropy of the category distribution over top-10 activating sentences. Is GPT-2-medium less polysemantic?</p>
+        <div class="callout callout-rose">
+          <span class="callout-label">Uncertainty Warning</span>
+          <p>Top-activating examples are not guaranteed to represent the neuron's function — they represent extreme inputs that may be atypical of normal usage. A neuron may be essentially inactive (very small activation) for 99% of inputs and highly active for unusual edge cases. Always examine the <em>distribution</em> of activations across a corpus, not just the top examples.</p>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ ARTIFACT -->
+    <section id="artifact" class="lesson-section">
+      <h2>Real Model Artifact</h2>
+      <p>Geva et al. 2021 "Transformer Feed-Forward Layers Are Key-Value Memories" ran experiments on GPT-2 and T5 with the following quantitative findings:</p>
+      <div class="callout callout-teal">
+        <span class="callout-label">Geva et al. 2021 — Key Quantitative Results</span>
+        <p>At least 29% of factual predictions made by GPT-2 and T5 rely on MLP neurons that can be identified via the key-value analysis. Suppressing identified "factual neurons" (setting their activation to zero) reduces the correct token's log-probability by an average of 0.34 points. Factual associations are stored in <em>middle-to-late</em> MLP layers (layers 5–10 for GPT-2-small), not in early layers or attention heads alone.</p>
+      </div>
+      <p><strong>Layerwise factual storage pattern:</strong></p>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Layer Range</th>
+            <th>Content Type</th>
+            <th>Example</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Layers 0–3</td>
+            <td>Syntactic / morphological patterns</td>
+            <td>Plural forms, verb tenses, POS tags</td>
+          </tr>
+          <tr>
+            <td>Layers 4–7</td>
+            <td>General semantic associations</td>
+            <td>Country–continent, animal–habitat</td>
+          </tr>
+          <tr>
+            <td>Layers 7–10</td>
+            <td>Specific factual associations</td>
+            <td>Country–capital, person–profession</td>
+          </tr>
+          <tr>
+            <td>Layers 10–12</td>
+            <td>Task-specific and stylistic</td>
+            <td>Formality level, domain register</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><strong>Elhage et al. 2022 "Toy Models of Superposition"</strong> demonstrates mathematically and empirically that a model with d dimensions can encode more than d features by placing them at near-orthogonal directions, at the cost of introducing "cross-talk" interference proportional to the overlap between feature directions. The key finding: sparse features benefit most from superposition — a 100-dimensional model can represent ~200 features with 50% sparsity while maintaining interference below a tolerable threshold.</p>
+      <p><strong>Meng et al. 2022 "ROME" (Rank-One Model Editing)</strong> exploits the key-value structure to perform surgical fact edits: given a false fact like "The Eiffel Tower is in Berlin," ROME identifies the MLP layer where "Eiffel Tower → city" is stored, constructs a rank-1 update to W_out that inserts a new value vector for "Berlin" → "Paris," and applies the update without retraining. This works because the MLP really does function as a key-value store at the mechanistic level.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ ASSESSMENT -->
+    <section id="assessment" class="lesson-section">
+      <h2>Assessment Check</h2>
+      <div class="assessment-box">
+        <h3>Scenario 1: Distributed Factual Storage</h3>
+        <p>A researcher finds that zeroing out layer 6's MLP activations in GPT-2 substantially reduces the model's ability to produce factual knowledge about French cities. But ablating layer 10's MLP also reduces performance. Layer 6 ablation reduces logit difference by 0.8; layer 10 ablation reduces it by 0.6. How should they interpret this?</p>
+        <details style="margin-top:1rem;">
+          <summary style="font-family:var(--mono);font-size:0.8rem;cursor:pointer;color:var(--teal);">Show strong answer</summary>
+          <div style="padding:1rem 0 0.5rem;">
+            <p><strong>Strong answer:</strong> This suggests distributed storage of factual knowledge across multiple MLP layers — a common finding in LLM interpretability. The correct interpretation requires ruling out two alternative explanations:</p>
+            <ol style="padding-left:1.5rem;margin-top:0.5rem;">
+              <li style="margin-bottom:0.4rem;"><strong>Relay hypothesis:</strong> Layer 6 stores the pattern and layer 10 stores the output projection. Under this hypothesis, ablating layer 6 corrupts the input to layer 10, so both ablations look similar. Test: ablate layer 6 alone, then check whether the layer 10 MLP input is corrupted (use activation patching to see if layer 10's input is different from baseline).</li>
+              <li style="margin-bottom:0.4rem;"><strong>Redundancy hypothesis:</strong> Both layers independently implement the same factual association. Ablating either degrades but doesn't eliminate the knowledge. Test: ablate both layers simultaneously — if the drop is super-additive (joint drop > 0.8 + 0.6 = 1.4), they are partially redundant.</li>
+              <li style="margin-bottom:0.4rem;"><strong>Path patching:</strong> The gold standard is to patch the specific MLP output from a "clean" run into a corrupted run (where the subject is replaced). If patching layer 6's MLP output restores the correct prediction, layer 6 is causally sufficient. If only patching both layers restores it, the knowledge is distributed.</li>
+            </ol>
+            <p style="margin-top:0.8rem;">Finding that ablation of layer l hurts performance does not tell you whether l is a cause or a relay. Path patching is required to distinguish these hypotheses.</p>
+          </div>
+        </details>
+      </div>
+      <div class="assessment-box">
+        <h3>Scenario 2: Replacing GELU with ReLU</h3>
+        <p>You propose replacing all GELU activations in GPT-2 with ReLU, arguing that ReLU is piecewise-linear and creates binary (on/off) neurons, which would make individual neurons more interpretable. What are the tradeoffs, and is this a sound interpretability strategy?</p>
+        <details style="margin-top:1rem;">
+          <summary style="font-family:var(--mono);font-size:0.8rem;cursor:pointer;color:var(--teal);">Show strong answer</summary>
+          <div style="padding:1rem 0 0.5rem;">
+            <p><strong>Strong answer:</strong> The proposed swap has a plausible interpretability motivation but several serious tradeoffs:</p>
+            <ol style="padding-left:1.5rem;margin-top:0.5rem;">
+              <li style="margin-bottom:0.4rem;"><strong>Interpretability benefit (real but modest):</strong> ReLU's hard threshold creates more binary neuron behavior — neurons are either exactly zero or positive. This could reduce polysemanticity in principle, since neurons only "fire" when the pre-activation clearly exceeds zero. However, polysemanticity arises from the geometry of the weight matrices (superposition), not from the activation function. Switching to ReLU does not change the fact that features are stored as directions in the neuron space.</li>
+              <li style="margin-bottom:0.4rem;"><strong>Performance cost:</strong> GELU consistently outperforms ReLU on language modeling benchmarks. The smooth gradient around zero (GELU) enables better optimization. Empirically, GPT-2 with ReLU achieves ~5–10% higher perplexity than with GELU at matched parameters and training compute.</li>
+              <li style="margin-bottom:0.4rem;"><strong>Dead neuron risk:</strong> ReLU neurons can permanently die (output exactly zero for all inputs) if their pre-activation bias shifts sufficiently negative. Dead neurons represent wasted capacity. GELU avoids this because it has non-zero gradient everywhere.</li>
+              <li style="margin-bottom:0.4rem;"><strong>What actually matters for interpretability:</strong> The OV circuit structure and superposition geometry are what make neurons hard to interpret — not the activation function. A more effective interpretability intervention is to train with an L1 sparsity penalty on neuron activations (to encourage monosemanticity) or to apply Sparse Autoencoders post-hoc. Activation function choice is a second-order effect.</li>
+            </ol>
+            <p style="margin-top:0.8rem;">The proposed strategy is not unsound, but it is not the most impactful intervention. The expected interpretability gain is small; the performance cost is non-trivial.</p>
+          </div>
+        </details>
+      </div>
+      <div class="assessment-box">
+        <h3>Scenario 3: Interpreting a Polysemantic Neuron</h3>
+        <p>You find a neuron in GPT-2 layer 7 that activates highly for: (a) tokens immediately following country names, (b) tokens in mathematical equations following the equals sign, and (c) the word "is" in definitions ("A photon is ___"). What is the most parsimonious interpretation of this neuron's function?</p>
+        <details style="margin-top:1rem;">
+          <summary style="font-family:var(--mono);font-size:0.8rem;cursor:pointer;color:var(--teal);">Show strong answer</summary>
+          <div style="padding:1rem 0 0.5rem;">
+            <p><strong>Strong answer:</strong> The parsimonious interpretation is that this neuron is a <strong>"definitional completion" or "identity assignment" detector</strong> — it activates when the model encounters a context where an entity is about to be identified or assigned a value. Country→capital, x=value, A is B are all instances of "identity assignment." The neuron is not separately detecting "countries" and "math" and "definitions" — it is detecting a shared abstract structure: "something has a value/identity that is about to be stated."</p>
+            <p style="margin-top:0.8rem;">This is a case where apparent polysemanticity (three different surface domains) is actually monosemanticity at a higher level of abstraction. The lesson: before concluding a neuron is polysemantic, check whether the activating contexts share a hidden abstract property.</p>
+            <p style="margin-top:0.8rem;">To test this hypothesis: find 20 sentences that activate this neuron highly and 20 that do not. Label the distinguishing feature. If "identity assignment" correctly separates the two groups with &gt; 80% accuracy, the monosemantic interpretation is supported.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ REFERENCES -->
+    <section id="references" class="lesson-section">
+      <h2>References</h2>
+      <ul class="ref-list">
+        <li>Vaswani, A. et al. (2017). <em>Attention Is All You Need.</em> NeurIPS. Original transformer with feedforward sublayer specification.</li>
+        <li>Geva, M. et al. (2021). <em>Transformer Feed-Forward Layers Are Key-Value Memories.</em> EMNLP. Introduces the key-value memory interpretation and demonstrates factual neuron identification.</li>
+        <li>Elhage, N. et al. (2022). <em>Toy Models of Superposition.</em> Anthropic. Mathematical analysis of superposition; derives the sparsity-capacity tradeoff.</li>
+        <li>Hendrycks, D. &amp; Gimpel, K. (2016). <em>Gaussian Error Linear Units (GELUs).</em> arXiv. Introduces GELU activation and its properties.</li>
+        <li>Touvron, H. et al. (2023). <em>LLaMA: Open and Efficient Foundation Language Models.</em> arXiv. Introduces LLaMA with SwiGLU MLP activations.</li>
+        <li>Meng, K. et al. (2022). <em>Locating and Editing Factual Associations in GPT.</em> NeurIPS. Introduces ROME; exploits MLP key-value structure for fact editing.</li>
+        <li>Bricken, T. et al. (2023). <em>Towards Monosemanticity: Decomposing Language Models With Dictionary Learning.</em> Anthropic. Sparse Autoencoders for finding monosemantic features.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ NEXT -->
+    <section id="next" class="lesson-section">
+      <h2>Next Step</h2>
+      <p>You have now seen how MLP layers function as key-value memories, why neurons are polysemantic, and how superposition makes MLP interpretation challenging. The final lesson in this track zooms out to generation mechanics — how the full model is used at inference time to produce token sequences, and what interpretability signals arise at the generation level.</p>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:2rem;">
+        <a href="attention-mechanics.html" style="display:inline-flex;align-items:center;gap:0.5rem;background:var(--sand);color:var(--ink);font-family:var(--mono);font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.75rem 1.5rem;text-decoration:none;border-radius:2px;border:1px solid var(--rule);">← Previous: Attention Mechanics</a>
+        <a href="generation-mechanics.html" class="next-btn">Next: Generation Mechanics →</a>
+      </div>
+    </section>
+  </main>
+</div>
+<footer>
+  <span>MI Atlas — Mechanistic Interpretability Course</span>
+  <span>Track 2: Architecture</span>
+  <span style="color:#4a4a48;">Lesson 2 of 3</span>
+</footer>
+<script>
+  // Sidebar scroll-spy
+  const sections = document.querySelectorAll('.lesson-section');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navLinks.forEach(link => {
+          link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px', threshold: 0 });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
