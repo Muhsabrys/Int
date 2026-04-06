@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lab 05: SAE Walkthrough — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="../index.html">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../track1/tokenization.html">Foundations</a></li>
+      <li><a href="../track2/attention-mechanics.html">Architecture</a></li>
+      <li><a href="../track3/hidden-states.html">Interpretability</a></li>
+      <li><a href="code-labs-hub.html">Code Labs</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">Lab 05</span>
+    <ul class="sidebar-nav">
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#setup">Setup</a></li>
+      <li><a href="#step1">Step 1: Collect Activations</a></li>
+      <li><a href="#step2">Step 2: SAE Architecture</a></li>
+      <li><a href="#step3">Step 3: Train SAE</a></li>
+      <li><a href="#step4">Step 4: Evaluate Quality</a></li>
+      <li><a href="#step5">Step 5: Inspect Features</a></li>
+      <li><a href="#step6">Step 6: Feature Steering</a></li>
+      <li><a href="#expected">Expected Outputs</a></li>
+      <li><a href="#stretch">Stretch Goals</a></li>
+    </ul>
+  </aside>
+
+  <main class="lesson-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a><span>›</span>
+      <a href="code-labs-hub.html">Code Labs</a><span>›</span>
+      Lab 05: SAE
+    </div>
+
+    <div class="lesson-section" id="overview">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Lab 05: Sparse Autoencoder Walkthrough</h2>
+      <div class="meta-box">
+        <div class="meta-item"><label>Track</label><span>Track 4: Code Labs</span></div>
+        <div class="meta-item"><label>Lab</label><span>05 of 05</span></div>
+        <div class="meta-item"><label>Time</label><span>~90 min</span></div>
+        <div class="meta-item"><label>Models</label><span>GPT-2 small + custom SAE</span></div>
+      </div>
+      <p>This lab trains a complete Sparse Autoencoder on GPT-2 MLP layer 9 activations. You will collect a corpus of activations, implement the SAE with proper normalisation and loss, train it, evaluate reconstruction quality, inspect the discovered features, and perform feature steering to confirm causal influence.</p>
+      <div class="callout callout-violet">
+        <span class="callout-label">Compute note</span>
+        <p>Training a full SAE requires a large activation corpus. This lab uses a small corpus (5000 token positions) which is sufficient for demonstration but will not produce publication-quality features. Plan for ~10 minutes training time on CPU. With GPU it takes ~2 minutes.</p>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="setup">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Setup</h2>
+      <pre class="code-block"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+<span class="kw">from</span> transformers <span class="kw">import</span> GPT2LMHeadModel, GPT2Tokenizer
+<span class="kw">from</span> torch.utils.data <span class="kw">import</span> DataLoader, TensorDataset
+
+device = torch.device(<span class="st">"cuda"</span> <span class="kw">if</span> torch.cuda.is_available() <span class="kw">else</span> <span class="st">"cpu"</span>)
+print(<span class="st">f"Device: {device}"</span>)
+
+model = GPT2LMHeadModel.from_pretrained(<span class="st">"gpt2"</span>).to(device)
+tok   = GPT2Tokenizer.from_pretrained(<span class="st">"gpt2"</span>)
+model.eval()
+
+D_MODEL  = <span class="nu">768</span>   <span class="cm"># GPT-2 hidden dim</span>
+D_SAE    = <span class="nu">768</span> * <span class="nu">4</span>  <span class="cm"># SAE expansion factor 4x</span>
+LAYER    = <span class="nu">9</span>      <span class="cm"># MLP layer to study</span>
+L1_COEFF = <span class="nu">1e-3</span>   <span class="cm"># sparsity coefficient</span></pre>
+    </div>
+
+    <div class="lesson-section" id="step1">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 1: Collect MLP Activations</h2>
+      <pre class="code-block"><span class="cm"># A small corpus of diverse text</span>
+corpus_texts = [
+    <span class="st">"The capital of France is Paris and the Eiffel Tower stands there."</span>,
+    <span class="st">"Scientists have discovered a new exoplanet in the habitable zone."</span>,
+    <span class="st">"The stock market fell sharply following the central bank announcement."</span>,
+    <span class="st">"She played Beethoven's Moonlight Sonata with remarkable expression."</span>,
+    <span class="st">"DNA replication occurs during the S phase of the cell cycle."</span>,
+    <span class="st">"The algorithm runs in O(n log n) time and uses O(n) space."</span>,
+    <span class="st">"Leonardo da Vinci painted the Mona Lisa in the early 16th century."</span>,
+    <span class="st">"The transformer model uses self-attention to process sequences."</span>,
+    <span class="st">"Photosynthesis converts carbon dioxide and water into glucose."</span>,
+    <span class="st">"The Great Wall of China stretches over 13,000 miles."</span>,
+] * <span class="nu">20</span>  <span class="cm"># repeat for more samples</span>
+
+activation_buffer = []
+
+<span class="kw">def</span> save_mlp_output(module, inp, out):
+    activation_buffer.append(out.detach().cpu())  <span class="cm"># (1, T, 768)</span>
+
+hook = model.transformer.h[LAYER].mlp.register_forward_hook(save_mlp_output)
+
+<span class="kw">for</span> text <span class="kw">in</span> corpus_texts:
+    ids = tok(text, return_tensors=<span class="st">"pt"</span>, max_length=<span class="nu">64</span>, truncation=<span class="kw">True</span>).to(device)
+    <span class="kw">with</span> torch.no_grad():
+        model(**ids)
+
+hook.remove()
+
+<span class="cm"># Flatten all token positions into one big matrix</span>
+all_acts = torch.cat([a.reshape(-<span class="nu">1</span>, D_MODEL) <span class="kw">for</span> a <span class="kw">in</span> activation_buffer], dim=<span class="nu">0</span>)
+print(<span class="st">f"Activation corpus: {all_acts.shape[0]} token positions × {D_MODEL} dims"</span>)
+print(<span class="st">f"Mean norm: {all_acts.norm(dim=-1).mean():.3f}"</span>)
+print(<span class="st">f"Std norm:  {all_acts.norm(dim=-1).std():.3f}"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step2">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 2: SAE Architecture</h2>
+      <pre class="code-block"><span class="kw">class</span> SparseAutoencoder(nn.Module):
+    <span class="st">"""
+    A minimal but correct SAE following Bricken et al. 2023.
+    Key details:
+      - b_pre centres the input distribution before encoding
+      - W_dec columns are constrained to unit norm (features live on sphere)
+      - Loss = reconstruction MSE + L1 sparsity penalty on hidden activations
+    """</span>
+    <span class="kw">def</span> __init__(self, d_model, d_hidden, l1_coeff=<span class="nu">1e-3</span>):
+        super().__init__()
+        self.d_model  = d_model
+        self.d_hidden = d_hidden
+        self.l1_coeff = l1_coeff
+
+        self.b_pre   = nn.Parameter(torch.zeros(d_model))
+        self.W_enc   = nn.Parameter(torch.randn(d_model, d_hidden) * (<span class="nu">1</span> / d_model**<span class="nu">0.5</span>))
+        self.b_enc   = nn.Parameter(torch.zeros(d_hidden))
+        self.W_dec   = nn.Parameter(torch.randn(d_hidden, d_model) * (<span class="nu">1</span> / d_hidden**<span class="nu">0.5</span>))
+        self.b_dec   = nn.Parameter(torch.zeros(d_model))
+
+        <span class="cm"># Initialise decoder columns to unit norm</span>
+        <span class="kw">with</span> torch.no_grad():
+            self.W_dec.data = nn.functional.normalize(self.W_dec.data, dim=<span class="nu">1</span>)
+
+    <span class="kw">def</span> encode(self, x):
+        x_centred = x - self.b_pre
+        h = torch.relu(x_centred @ self.W_enc + self.b_enc)  <span class="cm"># (B, d_hidden)</span>
+        <span class="kw">return</span> h
+
+    <span class="kw">def</span> decode(self, h):
+        <span class="kw">return</span> h @ self.W_dec + self.b_dec  <span class="cm"># (B, d_model)</span>
+
+    <span class="kw">def</span> forward(self, x):
+        h     = self.encode(x)
+        x_hat = self.decode(h)
+        recon = (x - x_hat).pow(<span class="nu">2</span>).sum(dim=-<span class="nu">1</span>).mean()  <span class="cm"># mean over batch</span>
+        l1    = self.l1_coeff * h.abs().sum(dim=-<span class="nu">1</span>).mean()
+        loss  = recon + l1
+        <span class="kw">return</span> x_hat, h, loss, recon, l1
+
+    <span class="kw">def</span> normalise_decoder(self):
+        <span class="st">"""Call after each optimiser step to keep W_dec columns on unit sphere."""</span>
+        <span class="kw">with</span> torch.no_grad():
+            self.W_dec.data = nn.functional.normalize(self.W_dec.data, dim=<span class="nu">1</span>)
+
+sae = SparseAutoencoder(D_MODEL, D_SAE, L1_COEFF).to(device)
+n_params = sum(p.numel() <span class="kw">for</span> p <span class="kw">in</span> sae.parameters())
+print(<span class="st">f"SAE parameters: {n_params:,}"</span>)
+print(<span class="st">f"  Encoder:  {D_MODEL} → {D_SAE}"</span>)
+print(<span class="st">f"  Decoder:  {D_SAE} → {D_MODEL}"</span>)
+print(<span class="st">f"  Expansion factor: {D_SAE // D_MODEL}×"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step3">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 3: Train the SAE</h2>
+      <pre class="code-block"><span class="cm"># DataLoader over collected activations</span>
+dataset    = TensorDataset(all_acts.to(device))
+dataloader = DataLoader(dataset, batch_size=<span class="nu">256</span>, shuffle=<span class="kw">True</span>)
+
+optimiser  = torch.optim.Adam(sae.parameters(), lr=<span class="nu">1e-3</span>)
+N_EPOCHS   = <span class="nu">30</span>
+
+history = {<span class="st">"loss"</span>: [], <span class="st">"recon"</span>: [], <span class="st">"l1"</span>: [], <span class="st">"l0"</span>: [], <span class="st">"dead_pct"</span>: []}
+feature_activation_counts = torch.zeros(D_SAE, device=device)
+
+<span class="kw">for</span> epoch <span class="kw">in</span> range(N_EPOCHS):
+    epoch_loss = epoch_recon = epoch_l1 = epoch_l0 = <span class="nu">0.0</span>
+    n_batches  = <span class="nu">0</span>
+
+    <span class="kw">for</span> (batch,) <span class="kw">in</span> dataloader:
+        optimiser.zero_grad()
+        x_hat, h, loss, recon, l1 = sae(batch)
+        loss.backward()
+        optimiser.step()
+        sae.normalise_decoder()   <span class="cm"># keep decoder columns unit-normed</span>
+
+        <span class="cm"># Track which features activated this batch</span>
+        feature_activation_counts += (h > <span class="nu">0</span>).float().sum(dim=<span class="nu">0</span>)
+
+        <span class="cm"># Metrics</span>
+        l0 = (h > <span class="nu">0</span>).float().sum(dim=-<span class="nu">1</span>).mean().item()
+        epoch_loss  += loss.item()
+        epoch_recon += recon.item()
+        epoch_l1    += l1.item()
+        epoch_l0    += l0
+        n_batches   += <span class="nu">1</span>
+
+    avg_l0   = epoch_l0 / n_batches
+    dead_pct = (feature_activation_counts == <span class="nu">0</span>).float().mean().item() * <span class="nu">100</span>
+
+    history[<span class="st">"loss"</span>].append(epoch_loss / n_batches)
+    history[<span class="st">"recon"</span>].append(epoch_recon / n_batches)
+    history[<span class="st">"l1"</span>].append(epoch_l1 / n_batches)
+    history[<span class="st">"l0"</span>].append(avg_l0)
+    history[<span class="st">"dead_pct"</span>].append(dead_pct)
+
+    <span class="kw">if</span> (epoch + <span class="nu">1</span>) % <span class="nu">5</span> == <span class="nu">0</span>:
+        print(<span class="st">f"Epoch {epoch+1:3d} | loss={epoch_loss/n_batches:.4f} | "</span>
+              <span class="st">f"recon={epoch_recon/n_batches:.4f} | L0={avg_l0:.1f} | dead={dead_pct:.1f}%"</span>)
+
+print(<span class="st">"Training complete."</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step4">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 4: Evaluate Reconstruction Quality</h2>
+      <pre class="code-block"><span class="cm"># Plot training curves</span>
+fig, axes = plt.subplots(<span class="nu">1</span>, <span class="nu">3</span>, figsize=(<span class="nu">14</span>, <span class="nu">3.5</span>))
+
+axes[<span class="nu">0</span>].plot(history[<span class="st">"recon"</span>], color=<span class="st">"#9c3a4a"</span>)
+axes[<span class="nu">0</span>].set_title(<span class="st">"Reconstruction Loss"</span>); axes[<span class="nu">0</span>].set_xlabel(<span class="st">"Epoch"</span>)
+
+axes[<span class="nu">1</span>].plot(history[<span class="st">"l0"</span>], color=<span class="st">"#c8832a"</span>)
+axes[<span class="nu">1</span>].set_title(<span class="st">"Mean L0 (active features per token)"</span>); axes[<span class="nu">1</span>].set_xlabel(<span class="st">"Epoch"</span>)
+
+axes[<span class="nu">2</span>].plot(history[<span class="st">"dead_pct"</span>], color=<span class="st">"#2a7c7c"</span>)
+axes[<span class="nu">2</span>].set_title(<span class="st">"Dead Feature %"</span>); axes[<span class="nu">2</span>].set_xlabel(<span class="st">"Epoch"</span>)
+
+plt.tight_layout()
+plt.savefig(<span class="st">"sae_training_curves.png"</span>, dpi=<span class="nu">150</span>)
+print(<span class="st">"Saved: sae_training_curves.png"</span>)
+
+<span class="cm"># Explained variance on held-out activations</span>
+sae.eval()
+<span class="kw">with</span> torch.no_grad():
+    x_sample  = all_acts[:<span class="nu">500</span>].to(device)
+    x_hat, h, *_ = sae(x_sample)
+    var_orig  = x_sample.var(dim=<span class="nu">0</span>).sum().item()
+    var_resid = (x_sample - x_hat).var(dim=<span class="nu">0</span>).sum().item()
+    explained = <span class="nu">1</span> - var_resid / var_orig
+    l0_final  = (h > <span class="nu">0</span>).float().sum(dim=-<span class="nu">1</span>).mean().item()
+    dead_final = (feature_activation_counts == <span class="nu">0</span>).float().mean().item()
+
+print(<span class="st">f"\n=== Final SAE Quality ==="</span>)
+print(<span class="st">f"  Explained variance: {explained:.3f}  (target: >0.80)"</span>)
+print(<span class="st">f"  Mean L0 (sparsity): {l0_final:.1f}  (target: 10–100)"</span>)
+print(<span class="st">f"  Dead features:      {dead_final*100:.1f}%  (target: <10%)"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="step5">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 5: Inspect Discovered Features</h2>
+      <pre class="code-block"><span class="cm"># For each SAE feature, find which tokens maximally activate it</span>
+
+<span class="cm"># Re-collect activations with token labels this time</span>
+token_buffer  = []
+act_buffer2   = []
+
+hook2 = model.transformer.h[LAYER].mlp.register_forward_hook(
+    <span class="kw">lambda</span> m, i, o: act_buffer2.append(o.detach().cpu()))
+
+<span class="kw">for</span> text <span class="kw">in</span> corpus_texts[:<span class="nu">10</span>]:  <span class="cm"># first 10 texts for inspection</span>
+    ids   = tok(text, return_tensors=<span class="st">"pt"</span>, max_length=<span class="nu">64</span>, truncation=<span class="kw">True</span>)
+    toks  = tok.convert_ids_to_tokens(ids[<span class="st">"input_ids"</span>][<span class="nu">0</span>])
+    token_buffer.extend(toks)
+    <span class="kw">with</span> torch.no_grad():
+        model(**ids.to(device))
+
+hook2.remove()
+
+all_acts2  = torch.cat([a.reshape(-<span class="nu">1</span>, D_MODEL) <span class="kw">for</span> a <span class="kw">in</span> act_buffer2], dim=<span class="nu">0</span>)
+sae.eval()
+<span class="kw">with</span> torch.no_grad():
+    _, h_vals, *_ = sae(all_acts2.to(device))
+h_vals = h_vals.cpu()  <span class="cm"># (N, D_SAE)</span>
+
+<span class="cm"># For top 5 most-active features, show max-activating tokens</span>
+total_acts    = h_vals.sum(dim=<span class="nu">0</span>)         <span class="cm"># total activation per feature</span>
+top5_features = total_acts.topk(<span class="nu">5</span>).indices.tolist()
+
+print(<span class="st">"Top 5 most active SAE features:\n"</span>)
+<span class="kw">for</span> feat_idx <span class="kw">in</span> top5_features:
+    feature_acts = h_vals[:, feat_idx]          <span class="cm"># (N,)</span>
+    top10_pos    = feature_acts.topk(<span class="nu">10</span>).indices.tolist()
+    top10_tokens = [token_buffer[p] <span class="kw">if</span> p < len(token_buffer) <span class="kw">else</span> <span class="st">"?"</span>
+                    <span class="kw">for</span> p <span class="kw">in</span> top10_pos]
+    top10_vals   = feature_acts[top10_pos].tolist()
+
+    print(<span class="st">f"Feature #{feat_idx} (total activation={total_acts[feat_idx]:.1f})"</span>)
+    <span class="kw">for</span> tok_str, val <span class="kw">in</span> zip(top10_tokens, top10_vals):
+        print(<span class="st">f"  {tok_str:20s}  act={val:.3f}"</span>)
+    print()</pre>
+
+      <div class="callout callout-amber">
+        <span class="callout-label">What to look for</span>
+        <p>Some features will cluster around a single concept (e.g., all capital letters, all punctuation, or all science words). Others will be polysemantic even after SAE decomposition — this is expected with a small training corpus. A real SAE trained on billions of tokens produces much cleaner features.</p>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="step6">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Step 6: Feature Steering</h2>
+      <p>Pick a feature that appears to encode a concept, then steer the model by adding its decoder direction to the MLP output at layer 9. Observe how the generated text changes.</p>
+      <pre class="code-block"><span class="cm"># Choose the most active feature and steer with it</span>
+STEER_FEATURE = top5_features[<span class="nu">0</span>]
+steer_dir     = sae.W_dec[STEER_FEATURE].detach()    <span class="cm"># (768,) — unit vector</span>
+STEER_ALPHA   = <span class="nu">15.0</span>                                 <span class="cm"># steering strength</span>
+
+print(<span class="st">f"Steering with SAE feature #{STEER_FEATURE} (α={STEER_ALPHA})"</span>)
+
+<span class="kw">def</span> steer_hook(module, inp, output):
+    output[:, :, :] = output + STEER_ALPHA * steer_dir.to(device)
+    <span class="kw">return</span> output
+
+PROMPT = <span class="st">"The scientist discovered that"</span>
+input_ids = tok.encode(PROMPT, return_tensors=<span class="st">"pt"</span>).to(device)
+
+<span class="cm"># Baseline generation (no steering)</span>
+<span class="kw">with</span> torch.no_grad():
+    baseline = model.generate(
+        input_ids, max_new_tokens=<span class="nu">25</span>, do_sample=<span class="kw">False</span>,
+        pad_token_id=tok.eos_token_id)
+print(<span class="st">f"Baseline:  {tok.decode(baseline[0])}"</span>)
+
+<span class="cm"># Steered generation</span>
+hook = model.transformer.h[LAYER].mlp.register_forward_hook(steer_hook)
+<span class="kw">with</span> torch.no_grad():
+    steered = model.generate(
+        input_ids, max_new_tokens=<span class="nu">25</span>, do_sample=<span class="kw">False</span>,
+        pad_token_id=tok.eos_token_id)
+hook.remove()
+print(<span class="st">f"Steered:   {tok.decode(steered[0])}"</span>)
+
+<span class="cm"># Try negative steering (opposite direction)</span>
+<span class="kw">def</span> anti_steer_hook(module, inp, output):
+    output[:, :, :] = output - STEER_ALPHA * steer_dir.to(device)
+    <span class="kw">return</span> output
+
+hook = model.transformer.h[LAYER].mlp.register_forward_hook(anti_steer_hook)
+<span class="kw">with</span> torch.no_grad():
+    anti_steered = model.generate(
+        input_ids, max_new_tokens=<span class="nu">25</span>, do_sample=<span class="kw">False</span>,
+        pad_token_id=tok.eos_token_id)
+hook.remove()
+print(<span class="st">f"Anti-steer:{tok.decode(anti_steered[0])}"</span>)</pre>
+    </div>
+
+    <div class="lesson-section" id="expected">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Expected Outputs</h2>
+      <table class="comparison-table">
+        <thead><tr><th>Metric</th><th>Expected Value</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Activation corpus size</td><td>~6,400 token positions</td><td>10 texts × ~64 tokens</td></tr>
+          <tr><td>Explained variance (final)</td><td>0.75 – 0.92</td><td>Higher with more training data</td></tr>
+          <tr><td>Mean L0</td><td>15 – 60</td><td>Depends on L1 coefficient</td></tr>
+          <tr><td>Dead features</td><td>10 – 40%</td><td>High due to small corpus — normal</td></tr>
+          <tr><td>Top feature tokens</td><td>Clustered by category</td><td>Punctuation, capitals, or domain words</td></tr>
+          <tr><td>Steered output</td><td>Noticeably different topic</td><td>Shift should relate to top-activating tokens</td></tr>
+        </tbody>
+      </table>
+      <div class="callout callout-teal">
+        <span class="callout-label">Improving results</span>
+        <p>To get cleaner features: (1) collect 100× more activations using a large text dataset like WikiText-103; (2) increase expansion factor to 8× or 16×; (3) train for 50+ epochs; (4) add an auxiliary loss to prevent dead features (the "ghost grads" trick from Bricken et al. 2023).</p>
+      </div>
+    </div>
+
+    <div class="lesson-section" id="stretch">
+      <h2><span class="section-accent" style="background:var(--violet)"></span>Stretch Goals</h2>
+      <div class="exercise-box">
+        <h3>Extend the SAE Study</h3>
+        <ul class="step-list">
+          <li class="step-item"><span class="step-pill">S1</span><span class="step-text">Train SAEs with L1 coefficients 1e-4, 1e-3, 1e-2, and 1e-1. Plot the Pareto frontier: L0 vs explained variance. Identify the coefficient that gives the best tradeoff.</span></li>
+          <li class="step-item"><span class="step-pill">S2</span><span class="step-text">Implement the "ghost grads" dead-feature prevention: for dead features, add a small gradient signal proportional to the reconstruction error. Check if dead feature % drops below 5%.</span></li>
+          <li class="step-item"><span class="step-pill">S3</span><span class="step-text">Train SAEs on three different GPT-2 layers (3, 6, 9). Compare the feature interpretability across layers. Do later layers produce more semantically coherent features?</span></li>
+          <li class="step-item"><span class="step-pill">S4</span><span class="step-text">Use the trained SAE to decompose the logit attribution from Lab 03. For the "Eiffel Tower → Paris" fact, which SAE features contribute most to the "Paris" logit? What do those features represent?</span></li>
+        </ul>
+      </div>
+      <a class="next-btn" href="../index.html">← Back to Atlas Home</a>
+    </div>
+
+  </main>
+</div>
+
+<footer><span>Mechanistic Interpretability Atlas</span> · MIT License · 2025</footer>
+<script>
+const sections = document.querySelectorAll('.lesson-section');
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.remove('active'));
+      const active = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
