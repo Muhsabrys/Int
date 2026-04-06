@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Layer Probing — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,600&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../index.html">Home</a></li>
+      <li><a href="../index.html#tracks">Tracks</a></li>
+      <li><a href="../index.html#about">About</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">In This Lesson</span>
+    <ul class="sidebar-nav">
+      <li><a href="#metadata">Metadata</a></li>
+      <li><a href="#outcomes">Learning Outcomes</a></li>
+      <li><a href="#setup">Conceptual Setup</a></li>
+      <li><a href="#intuition">Intuition First</a></li>
+      <li><a href="#technical">Technical Core</a></li>
+      <li><a href="#worked-example">Worked Example</a></li>
+      <li><a href="#mechint">Mech. Interpretation</a></li>
+      <li><a href="#exercise">Hands-on Exercise</a></li>
+      <li><a href="#artifact">Real Model Artifact</a></li>
+      <li><a href="#assessment">Assessment Check</a></li>
+      <li><a href="#references">References</a></li>
+      <li><a href="#next">Next Step</a></li>
+    </ul>
+  </aside>
+
+  <main class="lesson-content">
+
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span>›</span>
+      <a href="../index.html#tracks">Track 3: Interpretability</a>
+      <span>›</span>
+      Layer Probing
+    </div>
+
+    <!-- METADATA -->
+    <section id="metadata" class="lesson-section">
+      <h2>Layer Probing</h2>
+      <p style="font-family:var(--mono);font-size:0.8rem;color:#8a8680;margin-bottom:1.5rem;">Lesson 2 of 4 · Track 3: Interpretability</p>
+      <div class="meta-box">
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Track</div>
+          <div style="font-weight:400;">Track 3: Interpretability</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Lesson</div>
+          <div style="font-weight:400;">#2 of 4</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Prerequisites</div>
+          <div style="font-weight:400;">Lesson 1: Hidden States</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Est. Time</div>
+          <div style="font-weight:400;">60 minutes</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Modalities</div>
+          <div style="font-weight:400;">Text · Vision · Speech</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OUTCOMES -->
+    <section id="outcomes" class="lesson-section">
+      <h2>Learning Outcomes</h2>
+      <p>This lesson develops a rigorous understanding of probing classifiers as a diagnostic tool for identifying linearly encoded features in transformer hidden states. You will leave able to design, run, and critically interpret probing experiments — including understanding when high probe accuracy can and cannot support causal claims.</p>
+      <ul class="outcomes-list">
+        <li>Define a probing classifier and state the precise claim that high probe accuracy supports: <em>linear decodability</em>, not causal usage.</li>
+        <li>Implement a POS-tag probe using logistic regression on GPT-2 hidden states with scikit-learn.</li>
+        <li>Compute probe selectivity (probe accuracy minus control probe accuracy) to control for probe capacity artifacts.</li>
+        <li>Explain minimum description length (MDL) probing and why it is more rigorous than raw accuracy.</li>
+        <li>Describe the structural probe of Hewitt &amp; Manning (2019) and what it tests about syntactic geometry.</li>
+        <li>Identify which layers contain which types of information in BERT-large according to Tenney et al. (2019).</li>
+      </ul>
+    </section>
+
+    <!-- SETUP -->
+    <section id="setup" class="lesson-section">
+      <h2>Conceptual Setup</h2>
+      <p>Layer probing (also called <strong>probing classifiers</strong> or <strong>structural probes</strong>) is the practice of training a simple classifier — typically a linear model — on top of a frozen model's hidden states, to test whether a specific linguistic or perceptual property is encoded in those representations.</p>
+      <div class="callout-rose">
+        <strong>The core claim probing supports:</strong> If a simple linear classifier can predict property X from hidden state h with accuracy significantly above chance, then property X is <em>linearly decodable</em> from h. This is a necessary (but not sufficient) condition for the model to use that property computationally.
+      </div>
+      <p>The probe is trained on frozen representations — the transformer weights are never updated. Only the probe's own parameters (W, b) are trained. This ensures that any information discovered was present in the pre-trained representations, not learned by the probe training itself.</p>
+      <p><strong>Critical limitation:</strong> Linear decodability does not imply causal usage. The model might encode a property without using it for any downstream computation — for example, encoding part-of-speech tags as a side effect of other computations, while using different features for its actual predictions. Establishing causal usage requires activation patching (Lesson 3).</p>
+      <p>Probing is also used for <strong>negative results</strong>: if a well-designed probe cannot exceed chance accuracy, the property is very likely not linearly encoded at that layer, which is itself informative about the model's representations.</p>
+    </section>
+
+    <!-- INTUITION -->
+    <section id="intuition" class="lesson-section">
+      <h2>Intuition First</h2>
+      <p>Imagine you have a black box that takes sentences and outputs 768-dimensional vectors. You want to know if the box "knows" about part-of-speech tags. Here is how you find out:</p>
+      <ol class="step-list">
+        <li>Collect 10,000 sentences with POS annotations (e.g., from Penn Treebank).</li>
+        <li>Run each sentence through the black box and extract the hidden state vector for each word.</li>
+        <li>Train a logistic regression: input is the 768-dimensional hidden state, output is the POS label.</li>
+        <li>If the logistic regression achieves 95% accuracy on a held-out test set, the black box is encoding POS information — at least in a linearly accessible way.</li>
+      </ol>
+      <div class="callout-amber">
+        <strong>What the probe tells you vs. what it doesn&apos;t:</strong> The probe tells you the information is <em>there</em>. It does not tell you what the model <em>does</em> with that information. Think of the probe as a metal detector — it can tell you there is metal in the wall, but not whether the metal is structural steel or a forgotten nail.
+      </div>
+      <p>The choice of probe complexity matters. A simple logistic regression is more conservative — it can only find linear structure. An MLP probe can find nonlinear structure, but may also "work too hard," learning to solve the task using correlations that the transformer doesn't actually use. The field generally prefers linear probes for conservatism.</p>
+    </section>
+
+    <!-- TECHNICAL -->
+    <section id="technical" class="lesson-section">
+      <h2>Technical Core</h2>
+
+      <h3>Probe Setup</h3>
+      <p>For a hidden state h ∈ ℝ<sup>d</sup> and label y ∈ {1,...,C}, a linear probe learns:</p>
+      <pre class="code-block"><code>f(h) = Wh + b    where W ∈ R^(C × d), b ∈ R^C</code></pre>
+      <p>Training minimises cross-entropy loss on frozen h vectors. Only W and b are updated. The transformer weights are frozen.</p>
+
+      <h3>Probe Architecture Diagram</h3>
+      <pre class="ascii-diagram">Input sentence: "The cat sat on the mat"
+       |
+Frozen Transformer (GPT-2 / BERT)
+       |
+Hidden States h[l] in R^(T x 768)
+       |    <- frozen, not updated
+Linear Probe: W in R^(C x 768)
+       |    <- trained on labels
+Predictions: POS, NER, parse depth, etc.</pre>
+
+      <h3>Probe Accuracy Interpretation</h3>
+      <table class="comparison-table">
+        <thead>
+          <tr><th>Accuracy Range</th><th>Interpretation</th><th>Implication</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>&gt;95%</td><td>Strongly linearly encoded</td><td>Feature is prominent in this layer</td></tr>
+          <tr><td>85–95%</td><td>Present but distributed</td><td>Feature exists, may be noisy or entangled</td></tr>
+          <tr><td>75–85%</td><td>Weak or partial encoding</td><td>Some signal; nonlinear probe may do better</td></tr>
+          <tr><td>&lt;75%</td><td>Not linearly accessible</td><td>Property not encoded linearly at this layer</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Selectivity: Controlling for Probe Capacity</h3>
+      <p>A probe with many parameters may achieve high accuracy just because it memorises the training data. <strong>Selectivity</strong> controls for this:</p>
+      <pre class="code-block"><code>Selectivity = probe_accuracy - control_probe_accuracy</code></pre>
+      <p>The control probe has the same architecture but is trained on randomly shuffled labels. If the control probe gets 70% (due to dataset imbalance or model capacity), and the real probe gets 85%, selectivity = 15% — a more honest measure of how much the probe is learning from the representations.</p>
+
+      <h3>Minimum Description Length (MDL) Probing</h3>
+      <p>MDL probing (Voita &amp; Titov 2020) measures the <em>compression gain</em> from using the representations to encode the labels, compared to a random baseline. It asks: how many bits does knowing h save you when communicating y?</p>
+      <p>MDL is more rigorous than accuracy because it penalises probes for the complexity of the information they needed to learn. A large gain = genuine encoding. A small gain = the probe is exploiting statistical artifacts.</p>
+
+      <h3>Structural Probes (Hewitt &amp; Manning 2019)</h3>
+      <p>Structural probes test a specific geometric hypothesis: do parse-tree distances between words correspond to L2 distances in hidden state space? The probe learns a linear transformation B such that:</p>
+      <pre class="code-block"><code>tree_distance(word_i, word_j) ≈ ||B·h_i - B·h_j||²</code></pre>
+      <p>If such B can be found with low error, then syntactic structure is geometrically encoded in the transformer's hidden space.</p>
+
+      <h3>Probe Types Compared</h3>
+      <table class="comparison-table">
+        <thead>
+          <tr><th>Probe Type</th><th>What Is Tested</th><th>Risk</th><th>Best Used For</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Linear probe (logistic regression)</td><td>Linear decodability of discrete labels</td><td>Low — conservative</td><td>POS, NER, coref, sentiment</td></tr>
+          <tr><td>MLP probe (1–2 hidden layers)</td><td>Nonlinear decodability</td><td>High — may overfit to artifacts</td><td>Complex tasks, upper-bound estimation</td></tr>
+          <tr><td>Structural probe</td><td>Geometric encoding of relational structure</td><td>Medium — depends on transformation B</td><td>Syntactic trees, dependency distances</td></tr>
+          <tr><td>MDL probe</td><td>Compression gain from representations</td><td>Low — built-in complexity control</td><td>Rigorous layer-wise comparison</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- WORKED EXAMPLE -->
+    <section id="worked-example" class="lesson-section">
+      <h2>Worked Example</h2>
+      <p>A minimal POS probe on GPT-2 layer 6 using a toy noun/verb dataset:</p>
+      <pre class="code-block"><code>import torch
+import numpy as np
+from transformers import GPT2Model, GPT2Tokenizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+
+model = GPT2Model.from_pretrained("gpt2")
+tok = GPT2Tokenizer.from_pretrained("gpt2")
+model.eval()
+
+# Toy POS probe: 10 nouns, 10 verbs
+nouns = ["cat", "dog", "house", "tree", "book",
+         "city", "river", "mountain", "cloud", "star"]
+verbs = ["run", "jump", "build", "read", "write",
+         "sing", "dance", "climb", "swim", "fly"]
+
+def get_embedding(word, layer=6):
+    inputs = tok(word, return_tensors="pt")
+    with torch.no_grad():
+        out = model(**inputs, output_hidden_states=True)
+    return out.hidden_states[layer][0, 0, :].numpy()
+
+X = [get_embedding(w) for w in nouns + verbs]
+y = [0]*10 + [1]*10  # 0=noun, 1=verb
+
+X_train, X_test = X[:16], X[16:]
+y_train, y_test = y[:16], y[16:]
+
+clf = LogisticRegression(max_iter=500)
+clf.fit(X_train, y_train)
+preds = clf.predict(X_test)
+print(f"POS probe accuracy at layer 6: {accuracy_score(y_test, preds):.2%}")
+
+# Compare across layers
+print("\\nProbe accuracy by layer:")
+for layer in range(13):
+    X_all = [get_embedding(w, layer=layer) for w in nouns + verbs]
+    clf_l = LogisticRegression(max_iter=500)
+    clf_l.fit(X_all[:16], y[:16])
+    acc = accuracy_score(y[16:], clf_l.predict(X_all[16:]))
+    bar = "#" * int(acc * 20)
+    print(f"  Layer {layer:2d}: {acc:.2%}  {bar}")
+
+# Control probe: random label shuffle
+import random
+y_shuffled = y[:]
+random.shuffle(y_shuffled)
+clf_ctrl = LogisticRegression(max_iter=500)
+clf_ctrl.fit(X[:16], y_shuffled[:16])
+ctrl_acc = accuracy_score(y_shuffled[16:], clf_ctrl.predict(X[16:]))
+print(f"\\nControl probe accuracy: {ctrl_acc:.2%}")
+print(f"Selectivity at layer 6: {accuracy_score(y_test, preds) - ctrl_acc:.2%}")</code></pre>
+      <div class="callout-rose">
+        <strong>Expected results:</strong> Layer 6 should achieve ~80–90% on this toy dataset. Control probe should be near 50% (random guessing for balanced classes). Selectivity should be 30–40 percentage points.
+      </div>
+    </section>
+
+    <!-- MECHINT -->
+    <section id="mechint" class="lesson-section">
+      <h2>Mechanistic Interpretation Across Modalities</h2>
+
+      <h3>Text: Probing GPT-2 for Grammatical Number Agreement</h3>
+      <p>Train a probe to predict subject noun number (singular/plural) from the hidden state at the subject noun position. Probe across all layers.</p>
+      <p><strong>Expected finding:</strong> Accuracy peaks around layers 4–6, the zone where syntactic features are most accessible. Later layers show decreased accuracy as semantic and predictive information dominates.</p>
+      <p><strong>Why it matters:</strong> If the model uses subject number to predict verb form (e.g., "the cats [are/is]"), the information must be present in the hidden state at the subject position. High probe accuracy is a necessary precondition for this mechanism to work.</p>
+      <div class="callout-amber">
+        <strong>Caution:</strong> High probe accuracy at the subject position does not confirm that the model routes this information to the verb position. That requires activation patching (Lesson 3). Probing only confirms the information exists.
+      </div>
+
+      <h3>Vision: Probing ViT for Object Presence</h3>
+      <p>Train a linear probe on ViT hidden states ([CLS] token) to predict binary labels: "does this image contain a dog?" Probe each layer from 0 to 12.</p>
+      <ul>
+        <li><strong>Layer 2:</strong> ~65% accuracy — slightly above chance. Low-level features only.</li>
+        <li><strong>Layer 8:</strong> ~82% accuracy — object parts becoming recognisable.</li>
+        <li><strong>Layer 12:</strong> &gt;90% accuracy — object identity strongly encoded.</li>
+      </ul>
+      <p><strong>What is measured:</strong> Binary classification accuracy per layer.</p>
+      <div class="callout-teal">
+        <strong>Caution:</strong> ViT was trained with a classification objective — probing for ImageNet classes is partially circular. Test with held-out properties not present in the training objective for more trustworthy results.
+      </div>
+
+      <h3>Speech: Probing wav2vec2 for Phoneme Identity</h3>
+      <p>Pasad et al. (2021) extensively studied probing across all 24 layers of wav2vec2-large for multiple linguistic properties. Their key findings form a "probing profile":</p>
+      <ul>
+        <li><strong>Phoneme identity:</strong> Best predicted at layer 6/24 — relatively early, where acoustic features are still prominent.</li>
+        <li><strong>Speaker identity:</strong> Peaks at layer 1 — almost immediately, suggesting the model separates speaker information early.</li>
+        <li><strong>Word identity:</strong> Peaks at layer 15 — much deeper, where contextual and lexical information accumulates.</li>
+      </ul>
+      <p><strong>What is measured:</strong> Accuracy of logistic regression predicting phoneme label from per-frame hidden states.</p>
+      <div class="callout-violet">
+        <strong>Caution:</strong> Framewise phoneme labels require forced alignment to the audio signal. Alignment errors reduce probe accuracy independently of what the model encodes — particularly at phoneme boundaries.
+      </div>
+    </section>
+
+    <!-- EXERCISE -->
+    <section id="exercise" class="lesson-section">
+      <h2>Hands-on Exercise</h2>
+      <div class="exercise-box">
+        <h3>Full Layer-wise Probing Experiment</h3>
+        <p><strong>Task:</strong> Run a systematic probing experiment across all 13 layers of GPT-2, measuring POS-tag decodability at each layer with proper controls.</p>
+
+        <ol class="step-list">
+          <li>Collect 500 word-level examples with POS tags using NLTK (<code>nltk.corpus.treebank</code>) or spaCy. Balance classes.</li>
+          <li>For each word, extract the in-context hidden state at all 13 layers using <code>output_hidden_states=True</code>. Use the word in a sentence, not in isolation.</li>
+          <li>For each layer, train a logistic regression probe with 80/20 train/test split.</li>
+          <li>Record accuracy per layer. Plot accuracy vs. layer depth as a line chart.</li>
+          <li>Add a control probe line: same experiment but with randomly shuffled labels. This is your selectivity baseline.</li>
+          <li>Identify the peak layer. Is it the same for all POS categories, or does it differ by category?</li>
+        </ol>
+
+        <p><strong>Expected output:</strong></p>
+        <ul>
+          <li>Accuracy rises from ~55% at layer 0 to peak ~85% at layers 4–5.</li>
+          <li>Slight decrease toward layer 12 as semantic/predictive content dominates over syntactic features.</li>
+          <li>Control probe stays near 20–30% (depending on class balance).</li>
+        </ul>
+
+        <p><strong>Reflection questions:</strong></p>
+        <ul>
+          <li>Why might probe accuracy decrease in the final layers? What information is competing with POS tags in layer 12?</li>
+          <li>If probe accuracy at layer 6 is higher than at layer 12, what does this tell you about how GPT-2 uses POS information?</li>
+        </ul>
+
+        <div class="callout-green">
+          <strong>Stretch challenge:</strong> Implement MDL probing using online coding (see Voita &amp; Titov 2020). Train the probe incrementally on 1%, 2%, 5%, 10%, ... 100% of the data and compute the area under the accuracy curve. Compare MDL results to raw accuracy. Do they agree on which layer has the strongest encoding?
+        </div>
+      </div>
+    </section>
+
+    <!-- ARTIFACT -->
+    <section id="artifact" class="lesson-section">
+      <h2>Real Model Artifact</h2>
+      <div class="callout-rose">
+        <strong>Tenney et al. (2019): "BERT Rediscovers the Classical NLP Pipeline"</strong><br>
+        Probed BERT-large across all 24 layers for 8 NLP tasks using a "scalar mix" aggregation method.
+      </div>
+      <p>Key findings from this landmark study:</p>
+      <ul>
+        <li><strong>POS tagging:</strong> Peaks at layers 4–6. Grammatical categories are encoded early and stably.</li>
+        <li><strong>Constituency parsing:</strong> Peaks at layers 6–9. Phrase structure requires more processing than word-level tags.</li>
+        <li><strong>Dependency parsing:</strong> Peaks at layers 8–11. Syntactic relationships between non-adjacent words encoded in middle layers.</li>
+        <li><strong>Semantic role labeling:</strong> Peaks at layers 16–20. Requires understanding the meaning of predicates, not just syntax.</li>
+        <li><strong>Coreference resolution:</strong> Peaks at layers 18–22. Requires discourse-level understanding across sentences.</li>
+      </ul>
+      <p>This layer-ordering mirrors the classical NLP pipeline: POS → parsing → semantics → discourse. BERT appears to solve these tasks approximately in order of their traditional computational complexity. This is not guaranteed by the architecture — it is an emergent property of training on language data.</p>
+    </section>
+
+    <!-- ASSESSMENT -->
+    <section id="assessment" class="lesson-section">
+      <h2>Assessment Check</h2>
+      <div class="assessment-box">
+        <h3>Scenario 1: Probe Accuracy and Causal Claims</h3>
+        <p>A probe achieves 92% accuracy predicting sentiment from GPT-2 layer 10. A researcher concludes "GPT-2 uses sentiment information to guide its predictions." Is this inference valid?</p>
+        <details>
+          <summary>Show strong answer</summary>
+          <p><strong>No — the inference is not valid.</strong> Probe accuracy shows encoding, not causal usage. 92% accuracy means sentiment is linearly decodable from layer 10's hidden states. It does not mean the model's prediction mechanism uses that sentiment signal.</p>
+          <p><strong>To establish causal usage</strong>, you would need activation patching: find a pair of inputs that are identical except for sentiment, patch the layer 10 hidden state from the positive-sentiment run into the negative-sentiment run, and check whether the model's output probabilities shift in the expected direction. Only if patching the sentiment-encoding dimensions changes the output can you claim causal usage.</p>
+          <p>A weaker version of the inference — "GPT-2 encodes sentiment, which is available for use" — is valid.</p>
+        </details>
+
+        <h3>Scenario 2: Linear vs. MLP Probe Gap</h3>
+        <p>You compare probe accuracy for "syntactic depth" using a linear probe (65%) vs. a 2-layer MLP probe (78%). How do you interpret the 13-point gap?</p>
+        <details>
+          <summary>Show strong answer</summary>
+          <p><strong>The gap suggests syntactic depth is not purely linearly encoded.</strong> The MLP can access structure that the linear probe cannot — nonlinear combinations of hidden state dimensions that correlate with tree depth.</p>
+          <p><strong>However, the MLP result is less trustworthy.</strong> A larger model may be picking up task-relevant correlations or fitting to dataset-specific artifacts rather than genuinely decoding the feature. Two important checks:</p>
+          <ul>
+            <li>Run the MLP on randomly shuffled labels. If it achieves &gt;70% there too, the 78% result is mostly a capacity artifact.</li>
+            <li>Compare MDL for both probes. The linear probe's MDL gain may be larger even with lower accuracy, indicating it is extracting more genuine information per parameter.</li>
+          </ul>
+          <p>The linear probe's 65% is a conservative lower bound on the linearly encoded information. This is the number to report as the primary finding.</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- REFERENCES -->
+    <section id="references" class="lesson-section">
+      <h2>References</h2>
+      <ul class="ref-list">
+        <li>Tenney, I., et al. (2019). <em>BERT Rediscovers the Classical NLP Pipeline.</em> ACL 2019.</li>
+        <li>Hewitt, J., &amp; Manning, C. D. (2019). <em>A Structural Probe for Finding Syntax in Word Representations.</em> NAACL 2019.</li>
+        <li>Voita, E., &amp; Titov, I. (2020). <em>Information-Theoretic Probing with Minimum Description Length.</em> EMNLP 2020.</li>
+        <li>Pasad, A., et al. (2021). <em>Layer-wise Analysis of a Self-supervised Speech Representation Model.</em> ASRU 2021.</li>
+        <li>Ettinger, A., et al. (2016). <em>Probing for Semantic Evidence of Composition by Means of Simple Classification Tasks.</em> ACL Workshop 2016.</li>
+        <li>Belinkov, Y., &amp; Glass, J. (2019). <em>Analysis Methods in Neural Language Processing: A Survey.</em> TACL 2019.</li>
+      </ul>
+    </section>
+
+    <!-- NEXT -->
+    <section id="next" class="lesson-section">
+      <h2>Next Step</h2>
+      <p>Probing tells you what information is encoded. The next lesson — <strong>Activation Patching</strong> — tells you what information is actually <em>used</em> in computation. Activation patching is the gold standard for establishing causal claims in mechanistic interpretability.</p>
+      <a href="activation-patching.html" class="next-btn">Next: Activation Patching →</a>
+    </section>
+
+  </main>
+</div>
+
+<footer style="background:var(--ink);color:var(--cream);text-align:center;padding:2rem;font-family:var(--mono);font-size:0.75rem;margin-top:4rem;">
+  <p>MI Atlas · Track 3: Interpretability · <a href="../index.html" style="color:var(--rose-light);">Home</a></p>
+</footer>
+
+<script>
+  const sections = document.querySelectorAll('.lesson-section');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(link => {
+          link.classList.toggle('active', link.getAttribute('href') === '#' + entry.target.id);
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
