@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prediction — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,600&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../index.html">Home</a></li>
+      <li><a href="../index.html#tracks">Tracks</a></li>
+      <li><a href="../index.html#about">About</a></li>
+    </ul>
+  </div>
+</nav>
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">In This Lesson</span>
+    <ul class="sidebar-nav">
+      <li><a href="#metadata">Metadata</a></li>
+      <li><a href="#outcomes">Learning Outcomes</a></li>
+      <li><a href="#setup">Conceptual Setup</a></li>
+      <li><a href="#intuition">Intuition First</a></li>
+      <li><a href="#technical">Technical Core</a></li>
+      <li><a href="#worked-example">Worked Example</a></li>
+      <li><a href="#mechint">Mech. Interpretation</a></li>
+      <li><a href="#exercise">Hands-on Exercise</a></li>
+      <li><a href="#artifact">Real Model Artifact</a></li>
+      <li><a href="#assessment">Assessment Check</a></li>
+      <li><a href="#references">References</a></li>
+      <li><a href="#next">Next Step</a></li>
+    </ul>
+  </aside>
+  <main class="lesson-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span>›</span>
+      <a href="../index.html#tracks">Track 1: Foundations</a>
+      <span>›</span>
+      Prediction
+    </div>
+    <!-- ═══════════════════════════════════════════════════ METADATA -->
+    <section id="metadata" class="lesson-section">
+      <h2>Prediction</h2>
+      <p style="font-family:var(--mono);font-size:0.8rem;color:#8a8680;margin-bottom:1.5rem;">Lesson 4 of 4 · Track 1: Foundations</p>
+      <div class="meta-box">
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Track</div>
+          <div style="font-weight:400;">Track 1: Foundations</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Lesson</div>
+          <div style="font-weight:400;">#4 of 4</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Prerequisites</div>
+          <div style="font-weight:400;">Lessons 1–3: Tokenization, Embeddings, Transformer Layers</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Est. Time</div>
+          <div style="font-weight:400;">55 minutes</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Modalities</div>
+          <div style="font-weight:400;">Text · Vision · Speech</div>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ OUTCOMES -->
+    <section id="outcomes" class="lesson-section">
+      <h2>Learning Outcomes</h2>
+      <p>This final lesson in Track 1 closes the loop from raw input to final output. You will understand the mathematics of the prediction step—from residual stream to logits to probability distribution—and develop the interpretability tools that leverage this structure to explain model behavior: the logit lens and direct logit attribution.</p>
+      <ul class="outcomes-list">
+        <li>Explain the role of the unembedding matrix W_U and describe how it converts a residual stream vector into a logit score for each vocabulary token.</li>
+        <li>Derive the softmax function from first principles and explain why raw logits are converted to probabilities via softmax rather than used directly.</li>
+        <li>Define perplexity and cross-entropy loss and explain how they relate to prediction quality and model calibration.</li>
+        <li>Explain the logit lens technique: why it works, what assumptions it makes, and what its failure modes are.</li>
+        <li>Implement the logit lens from scratch using the Hugging Face API, tracking the rank of a target token across all layers.</li>
+        <li>Distinguish between greedy decoding, temperature sampling, top-k sampling, and top-p (nucleus) sampling—and identify when each is appropriate.</li>
+        <li>Apply direct logit attribution to decompose a model's confidence in a specific token into contributions from individual attention heads and MLP layers.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ SETUP -->
+    <section id="setup" class="lesson-section">
+      <h2>Conceptual Setup</h2>
+      <p>The final step in a transformer's forward pass is prediction: converting the last layer's residual stream into a probability distribution over the entire vocabulary. This is accomplished by the unembedding matrix W_U ∈ ℝ^{d×V} (equivalently, ℝ^{V×d} depending on convention), which projects the d-dimensional residual stream vector to a V-dimensional vector of raw scores called logits. In GPT-2-small: d = 768, V = 50,257. The unembedding is a single linear projection—one of the most interpretable operations in the entire model, precisely because it directly relates the residual stream geometry to the model's output vocabulary.</p>
+      <p>The language modeling training objective is to maximise the probability of the correct next token. Equivalently, during training, the model minimises the cross-entropy loss between the predicted probability distribution and the one-hot distribution over the actual next token. This training signal propagates back through all 12 layers, through the MLP and attention operations, all the way to the embedding weights. Every gradient update nudges the model toward making the residual stream at the last position more aligned with the direction in W_U that corresponds to the correct next token. Over millions of steps, this sculpts the entire computational stack—embeddings, attention patterns, MLP weights—to cooperate in placing the residual stream in a position that W_U maps to a high probability for correct predictions.</p>
+      <p>Understanding the prediction step is crucial for interpretability for two reasons. First, it is the only place where the model's internal representations are converted to external, human-interpretable quantities—probabilities over words. Any interpretability technique that aims to explain what the model predicts must ultimately connect to the prediction step. Second, the linearity of the unembedding operation means that we can ask, for any component of the residual stream (any attention head, any MLP layer, any individual neuron), "how much does this component contribute to the logit for token t?" This is the direct logit attribution technique, and it provides a complete, exact, and mechanistically grounded account of why the model predicts what it does.</p>
+      <p>The connection between the unembedding and the embedding is especially important in tied-weight models like GPT-2. When W_U = E^T (the transpose of the embedding matrix), the embedding space and the logit space are literally the same space. The direction in embedding space that points toward "Paris" is the same direction in residual stream space that, when projected by W_U, adds to "Paris"'s logit. This is what makes the logit lens technique meaningful: applying W_U to intermediate hidden states gives interpretable logit distributions because the hidden states live in the same geometric space as the embedding vectors that W_U was designed to project. For models without tied weights (e.g., T5, PaLM), the logit lens is still useful as an approximation, but the interpretation is less clean.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ INTUITION -->
+    <section id="intuition" class="lesson-section">
+      <h2>Intuition First</h2>
+      <p>Imagine the final residual stream at the last token position as a query: "given everything I have computed about this context, what comes next?" The unembedding matrix W_U is the index that answers this query: it assigns a score to every possible next token by measuring how well the current residual stream vector aligns with that token's "answer direction." A token t gets a high score (high logit) if the current residual stream points strongly in the direction of the t-th column of W_U. The softmax then converts these scores into probabilities: high-scoring tokens get most of the probability mass, low-scoring tokens get almost none.</p>
+      <p>The logit lens exploits this picture by applying the query (the unembedding W_U) not just to the final layer's residual stream, but to every intermediate layer's residual stream. If we apply W_U to the layer-3 residual stream, we get a "draft prediction" at layer 3—a distribution over next tokens that represents what the model would predict if it stopped computing after 3 layers. This draft is typically noisier and less accurate than the final prediction, but it is informative: it tells us what information is already present in the residual stream at layer 3, before layers 4–12 have had a chance to add their contributions.</p>
+      <p>Think of it like watching a student write an exam answer. After 5 minutes (early layers) they might have written "The Eiffel Tower is in..." and paused—they know the general topic. After 10 minutes (middle layers) they have written "...France" but haven't committed to the city. After 20 minutes (late layers) they've refined to "...Paris, France." The logit lens lets you watch this refinement happen layer by layer, catching the model's "thought process" at each stage of computation. This turns the black box of a 12-layer transformer into a sequence of 12 progressively refined predictions, each of which can be inspected and interpreted.</p>
+      <p>Direct logit attribution takes this further: it asks not just "what does each layer predict?" but "which specific component is responsible for the prediction?" Because the residual stream is a sum of contributions (x_L = x_0 + Σ Δ_attn + Σ Δ_mlp), and the logit is a linear function of the residual stream (logit(t) = W_U[t] · x_L), the logit decomposes into a sum over all components: logit(t) = W_U[t] · x_0 + Σ W_U[t] · Δ_attn_l + Σ W_U[t] · Δ_mlp_l. Each term is a scalar that can be computed independently. This decomposition is exact—it perfectly explains the model's prediction in terms of contributions from every circuit component.</p>
+      <div class="callout callout-amber">
+        <div class="callout-label">Key Technique</div>
+        <p>Direct logit attribution = apply W_U to each component's residual stream contribution separately. The result is a signed scalar per component: positive means "voted for the correct token," negative means "voted against it." The sum of all components equals the total logit. This is one of the most powerful and exact tools in the mechanistic interpretability toolkit.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ TECHNICAL -->
+    <section id="technical" class="lesson-section">
+      <h2>Technical Core</h2>
+      <p>The prediction step involves four operations in sequence: (1) an optional final layer normalisation, (2) the unembedding projection, (3) temperature scaling, and (4) softmax. For GPT-2:</p>
+      <pre class="code-block"><span class="cm"># GPT-2 prediction step</span>
+x_L     = final residual stream vector, ∈ ℝ^768
+x_LN    = LayerNorm(x_L)               <span class="cm"># final LN before head</span>
+z       = x_LN @ W_U.T                 <span class="cm"># logits, ∈ ℝ^50257</span>
+z_T     = z / T                        <span class="cm"># temperature scaling</span>
+p       = softmax(z_T)                 <span class="cm"># probabilities, ∈ ℝ^50257</span>
+<span class="cm"># Softmax: p_i = exp(z_i) / Σ_j exp(z_j)</span>
+<span class="cm"># Temperature T: T→0 = argmax (greedy), T→∞ = uniform</span>
+<span class="cm"># Cross-entropy loss during training:</span>
+L = -log(p[correct_token_id])
+<span class="cm"># Perplexity over a sequence of N tokens:</span>
+PPL = exp(mean([-log(p_t[correct_t]) for t in 1..N]))</pre>
+      <p><strong>Logits</strong> are unnormalised log-probabilities. The logit z_t for token t is the raw score before softmax. A token with logit +5 is e^5 ≈ 148 times more likely than a token with logit 0, under softmax. The difference between two logits (the "logit difference") is often more interpretable than the individual logits, because it directly measures relative preference: logit("Paris") − logit("London") > 0 means the model prefers Paris over London.</p>
+      <p><strong>Temperature T</strong> controls the sharpness of the probability distribution. At T = 1.0 (default), softmax is applied to raw logits. At T < 1 (e.g., T = 0.7), logits are divided by T before softmax, sharpening the distribution—the highest-probability token gets even more mass, reducing diversity. At T > 1 (e.g., T = 1.5), logits are made smaller, flattening the distribution—lower-probability tokens get more mass, increasing diversity. Temperature = 0 is the limit of greedy decoding (always pick the argmax).</p>
+      <p><strong>Top-k sampling</strong> restricts the probability distribution to the k highest-logit tokens before sampling, setting all others to zero probability. This prevents very unlikely tokens from being sampled while still introducing diversity. <strong>Top-p (nucleus) sampling</strong> restricts to the smallest set of tokens whose cumulative probability exceeds p. If p = 0.9, the "nucleus" is the minimal set of tokens accounting for 90% of the probability mass under the original distribution. Nucleus sampling is adaptive: if the model is confident (one token has 0.95 probability), the nucleus is just that one token; if the model is uncertain (many tokens each have ~1% probability), the nucleus includes many tokens.</p>
+      <pre class="ascii-diagram">Final Hidden State x_L ∈ ℝ^768
+          ↓
+      LayerNorm (final)
+          ↓  x_LN ∈ ℝ^768
+      W_U ∈ ℝ^(50257×768)
+          ↓
+  Logits z ∈ ℝ^50257
+  z[" Paris"]  = +4.82
+  z[" France"] = +3.91
+  z[" London"] = +2.14
+  z[" the"]    = +1.73
+  ...
+          ↓  softmax(z / T)
+Probability Distribution p ∈ ℝ^50257
+  p(" Paris")  = 0.432
+  p(" France") = 0.168
+  p(" London") = 0.048
+  ...
+          ↓  argmax (greedy) or sample
+Output token: " Paris"</pre>
+      <p><strong>The logit lens</strong> applies W_U to the hidden state at each layer l (optionally after a layer norm applied with the final layer's scale/shift parameters). This produces a "proto-logit" at each layer, revealing the model's evolving prediction. For the sentence "The Eiffel Tower is in", the target token " Paris" typically appears in the top-3 proto-predictions around layer 8–10 of GPT-2-small and reaches rank 1 by layer 11.</p>
+      <p><strong>Direct logit attribution</strong> decomposes the final logit for token t as:</p>
+      <pre class="ascii-diagram">logit(t) = W_U[t] · x_L
+         = W_U[t] · (x_0 + Σ_l Δ_attn_l + Σ_l Δ_mlp_l)
+         = W_U[t]·x_0 + Σ_l W_U[t]·Δ_attn_l + Σ_l W_U[t]·Δ_mlp_l
+Each term is a scalar: the "vote" of each component for token t.
+Positive = contributes to predicting t.
+Negative = reduces probability of t.
+Sum = total logit(t) (exact decomposition).</pre>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Decoding Strategy</th>
+            <th>Deterministic?</th>
+            <th>Diversity</th>
+            <th>Truncation</th>
+            <th>Best For</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Greedy (T=0)</td><td>Yes</td><td>None</td><td>Top 1</td><td>Reproducible baselines</td></tr>
+          <tr><td>Temperature (T>0)</td><td>No</td><td>Low–high (varies with T)</td><td>None</td><td>Creative writing, exploration</td></tr>
+          <tr><td>Top-k</td><td>No</td><td>Medium</td><td>Fixed k tokens</td><td>Simple diversity control</td></tr>
+          <tr><td>Top-p (nucleus)</td><td>No</td><td>Adaptive</td><td>Dynamic set</td><td>Open-ended generation</td></tr>
+          <tr><td>Beam search</td><td>Yes (beam width)</td><td>Low</td><td>Prunes low-prob beams</td><td>Translation, summarisation</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Causal vs. masked attention</strong> affects what the model can attend to at prediction time. GPT-2 uses causal masking (lower-triangular attention mask): each token can only attend to earlier tokens in the sequence. This is appropriate for language modeling, where predicting token t should not use tokens t+1, t+2, ... (they are the future). BERT uses bidirectional attention (no causal mask) during training on masked language modeling, meaning each masked token can attend to all unmasked tokens on both sides. This bidirectionality makes BERT representations richer for understanding but prevents it from being used for autoregressive generation. The prediction step in BERT uses only the masked token positions; in GPT-2, it uses the last token position (or all positions for teacher-forced training).</p>
+      <div class="callout callout-teal">
+        <div class="callout-label">Interpretability Connection</div>
+        <p>The cross-entropy loss is interpretable as a per-token surprise: −log p(correct token). A loss of 0 means perfect prediction. A loss of log(50257) ≈ 10.8 means the model is completely uncertain (uniform distribution). Most tokens in GPT-2's training data have loss ~3–4, corresponding to perplexity ~20–55. Tokens where loss is very low (~1) are predictable from context; tokens where loss is high (~8) are unpredictable or rare. This per-token loss profile is itself an interpretability signal: high-loss tokens are exactly the ones where the model's circuit for prediction is failing or working hard.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ WORKED EXAMPLE -->
+    <section id="worked-example" class="lesson-section">
+      <h2>Worked Example</h2>
+      <p>We implement the logit lens for the sentence "The Eiffel Tower is in", tracking the rank of " Paris" (the target token) across all 13 layers of GPT-2. This is the canonical logit lens demonstration in mechanistic interpretability research.</p>
+      <ol class="step-list">
+        <li class="step-item">
+          <span class="step-pill">01</span>
+          <span class="step-text">Load GPT2LMHeadModel (not GPT2Model—we need access to the language model head weight W_U). Extract <code style="font-family:var(--mono)">model.lm_head.weight</code>, which in GPT-2 is tied to the embedding matrix and has shape (50257, 768).</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">02</span>
+          <span class="step-text">Run the forward pass with <code style="font-family:var(--mono)">output_hidden_states=True</code> to get all 13 hidden state tensors. Each has shape (1, sequence_length, 768).</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">03</span>
+          <span class="step-text">For each layer l, extract the last-token hidden state <code style="font-family:var(--mono)">h[0, -1, :]</code> and compute logits by projecting through W_U: <code style="font-family:var(--mono)">logits = h @ W_U.T</code>. (Note: GPT-2 applies a final LayerNorm before the lm_head—for simplicity we skip this here; for exact results, apply <code style="font-family:var(--mono)">model.transformer.ln_f</code> first.)</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">04</span>
+          <span class="step-text">Find the rank of " Paris" in the logit vector. Rank 1 = highest logit (most predicted). Rank 50000 = near the bottom. Sort logits in descending order and find the position of the Paris token ID.</span>
+        </li>
+      </ol>
+      <pre class="code-block"><span class="kw">import</span> torch
+<span class="kw">from</span> transformers <span class="kw">import</span> GPT2LMHeadModel, GPT2Tokenizer
+model = GPT2LMHeadModel.from_pretrained(<span class="st">"gpt2"</span>)
+tok   = GPT2Tokenizer.from_pretrained(<span class="st">"gpt2"</span>)
+model.eval()
+text   = <span class="st">"The Eiffel Tower is in"</span>
+inputs = tok(text, return_tensors=<span class="st">"pt"</span>)
+<span class="kw">with</span> torch.no_grad():
+    outputs = model(**inputs, output_hidden_states=<span class="nu">True</span>)
+hidden_states = outputs.hidden_states  <span class="cm"># 13 tensors, each (1, T, 768)</span>
+W_U = model.lm_head.weight              <span class="cm"># (50257, 768) — tied to embedding</span>
+ln_f = model.transformer.ln_f          <span class="cm"># final LayerNorm before head</span>
+paris_id = tok.encode(<span class="st">" Paris"</span>)[<span class="nu">0</span>]   <span class="cm"># token ID for " Paris"</span>
+<span class="fn">print</span>(<span class="st">"Layer | Top-3 tokens                        | Paris rank"</span>)
+<span class="fn">print</span>(<span class="st">"-" * 60</span>)
+<span class="kw">for</span> l, h <span class="kw">in</span> enumerate(hidden_states):
+    last = h[<span class="nu">0</span>, -<span class="nu">1</span>, :]           <span class="cm"># (768,)</span>
+    last_ln = ln_f(last)          <span class="cm"># apply final LayerNorm</span>
+    logits = last_ln @ W_U.T      <span class="cm"># (50257,)</span>
+    sorted_ids = logits.argsort(descending=<span class="nu">True</span>)
+    rank = (sorted_ids == paris_id).nonzero().item() + <span class="nu">1</span>
+    top3 = [tok.decode([i]) <span class="kw">for</span> i <span class="kw">in</span> sorted_ids[:<span class="nu">3</span>]]
+    <span class="fn">print</span>(<span class="fn">f</span><span class="st">"  {l:2d}  | {str(top3):38s} | {rank:5d}"</span>)
+<span class="cm"># Expected output (approximate):
+# Layer | Top-3 tokens                        | Paris rank
+# ─────────────────────────────────────────────────────────
+#    0  | [' the', ' a', ',']                 |  4821
+#    1  | [' the', ' a', ',']                 |  3104
+#    2  | [' the', ' a', 'in']                |  1872
+#    3  | [' the', ' a', ' Paris']            |   847
+#    4  | [' the', ' Paris', ' France']       |   312
+#    5  | [' Paris', ' the', ' France']       |    87
+#    6  | [' Paris', ' France', ' the']       |    18
+#    7  | [' Paris', ' France', ' Europe']    |     5
+#    8  | [' Paris', ' France', ' London']    |     2
+#    9  | [' Paris', ' France', ' London']    |     1  ← rank 1!
+#   10  | [' Paris', ' France', ' Europe']    |     1
+#   11  | [' Paris', ' France', ' Europe']    |     1
+#   12  | [' Paris', ' France', ' Europe']    |     1</span></pre>
+      <p>The logit lens reveals a clear story: the model starts with generic high-frequency predictions (" the", " a") and gradually builds confidence in " Paris" across layers. The transition from rank ~300 (layer 4) to rank 1 (layer 9) marks the "factual knowledge crystallisation" for this prompt. Layers 5–9 are where the Eiffel Tower → Paris association is most actively being computed. Layers 10–12 consolidate and refine the prediction but do not change the qualitative outcome.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ MECHINT -->
+    <section id="mechint" class="lesson-section">
+      <h2>Mechanistic Interpretation Layer</h2>
+      <p>The prediction layer—logits and probabilities—provides the clearest window into what the model has computed. Three interpretability techniques map directly onto this layer across text, vision, and speech modalities.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Text: Logit Lens and Factual Memory Localisation</h3>
+      <p><strong>What is measured:</strong> The rank (or logit value) of the correct next token when the unembedding W_U is applied to the residual stream at each layer. For factual recall prompts like "The capital of France is ___", this tracks where in the model's depth the factual association "France → Paris" becomes a dominant prediction.</p>
+      <p><strong>Why it matters:</strong> The logit lens is the primary technique for localising where specific knowledge is stored in a transformer. If " Paris" reaches rank 1 at layer 9 and stays there through layer 12, this suggests that layers 7–9 are responsible for the key computational step that produces this factual prediction. Researchers use this to identify candidate layers for activation patching experiments, which can then confirm whether those layers are causally responsible.</p>
+      <p><strong>Typical output:</strong> For a model like GPT-2-small on canonical factual prompts, the correct token typically first enters the top-10 predictions at layers 4–6 and reaches rank 1 at layers 8–10. For very frequent facts (major world capitals, obvious word completions), the transition is sharper and occurs earlier. For rare facts or multi-hop reasoning (e.g., "The poet who wrote Pride and Prejudice was ___" — which is a trick question, as Austen wrote novels), the logit lens may show conflicting signals or the correct token may not reach rank 1 until very late layers.</p>
+      <p><strong>Cautious interpretation:</strong> The logit lens assumes that W_U is a meaningful projection at all layers—an assumption that holds most cleanly for tied-weight models where the embedding and unembedding spaces are identical. For models without weight tying, intermediate logits may not be interpretable in the same way. Additionally, the logit lens measures the direction of the residual stream relative to W_U, not the causal contribution of each layer. A layer could raise the rank of " Paris" not by adding a "Paris direction" to the residual stream, but by suppressing competing tokens like " London" and " Berlin". Distinguish between positive evidence (layer adds Paris direction) and negative evidence removal (layer removes competitors) using full direct logit attribution.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Vision: ViT Classification Logits and CLS Aggregation</h3>
+      <p><strong>What is measured:</strong> The probability distribution over ImageNet classes produced by the ViT classification head applied to the CLS token's final hidden state. The classification head is a single linear layer (no hidden units) mapping from d = 768 to the number of classes (1,000 for ImageNet). This is the visual analogue of the language model head W_U: it maps a token's final representation to output scores.</p>
+      <p><strong>Why it matters:</strong> Applying the ViT classification head to intermediate CLS representations (visual logit lens) reveals when image class information solidifies in the model's computation. For a well-classified image (e.g., a clear photograph of a golden retriever), the correct class typically reaches rank 1 at around layer 8 of 12 in ViT-B/16. For ambiguous images (e.g., a mixed-breed dog), the logit lens may show oscillation—the correct class gaining and losing rank across layers as different features are integrated.</p>
+      <p><strong>Typical output:</strong> 1,000-class probability distribution from a linear projection of the CLS token. Top-5 accuracy (is the correct class in the top 5?) is typically above 90% for ImageNet validation images with a standard ViT-B/16. Logit entropy (uncertainty) of the classification head output correlates with image ambiguity and out-of-distribution detection performance—higher entropy at the final layer indicates less model confidence, which can flag difficult or novel inputs.</p>
+      <p><strong>Cautious interpretation:</strong> The CLS token aggregation mechanism means that the final classification depends entirely on what information the attention heads have written to the CLS token position by the final layer. If a critical feature (e.g., the distinctive stripe pattern of a tiger) lives only in patch tokens and is not attended to by the CLS token, the classification will fail even if the feature is "present" in some patch representation. Gradient-based attribution methods (like GradCAM) applied to ViT must account for this CLS aggregation bottleneck—features only influence the output if they have been routed to CLS via attention.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Speech: CTC Predictions and the Blank Token</h3>
+      <p><strong>What is measured:</strong> Per-frame probability distributions over characters (or phonemes) in models using Connectionist Temporal Classification (CTC). CTC-based ASR models like wav2vec2-large-960h output a probability distribution over {A–Z, space, apostrophe, blank} at each audio frame (~50 frames per second). The "blank" token is a special CTC token that means "no character is being emitted at this frame."</p>
+      <p><strong>Why it matters:</strong> The CTC output layer is the speech model's equivalent of the language model head. Examining per-frame CTC predictions reveals when the model "commits" to a specific character transcription. For the word "Paris" spoken aloud, the CTC output will show high probability for "blank" during consonant-to-vowel transitions, then a brief spike for "P", back to "blank", then "A", etc. The CTC collapse algorithm (merging consecutive identical characters and removing blanks) then recovers the clean transcript. Understanding per-frame CTC predictions is essential for diagnosing transcription errors—a common error type is repeated character emissions (the model says "PAARRIS" before collapse), which reveals acoustic uncertainty at specific frames.</p>
+      <p><strong>Typical output:</strong> A T × |alphabet| matrix of probabilities, where T ≈ 50 per second of audio and |alphabet| = 32 (26 letters + special characters + blank). The blank token typically receives probability > 0.8 for the majority of frames, with character tokens spiking briefly around their acoustic realisations. The CTC collapse algorithm removes the blanks and merges consecutive identical characters to produce the final transcript. Visualising the per-frame CTC probabilities as a "piano roll" (time on x-axis, characters on y-axis, probability as intensity) provides a direct view of when the model is confident about each phoneme.</p>
+      <p><strong>Cautious interpretation:</strong> CTC predictions are highly peaked and noisy at the frame level—individual frames often show contradictory predictions (high probability for both 'R' and 'L' on the same frame). The information is in the aggregate, not in individual frame predictions. Additionally, CTC's independence assumption between frames (the model predicts each frame independently, without explicit language model integration) means that CTC-only models will make errors on acoustically ambiguous words ("wear" vs "ware") that a language model with broader context would not. Interpreting per-frame CTC predictions in isolation without the language model context overstates acoustic ambiguity.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ EXERCISE -->
+    <section id="exercise" class="lesson-section">
+      <h2>Hands-on Exercise</h2>
+      <div class="exercise-box">
+        <h3>Exercise: Implement the Logit Lens from Scratch</h3>
+        <p><strong>Task:</strong> Implement the logit lens and use it to find the "transition layer"—the layer at which the target token first reaches rank ≤ 5—for a set of factual and non-factual prompts. Then run a counterfactual comparison to see how the transition layer changes.</p>
+        <ol class="step-list">
+          <li class="step-item">
+            <span class="step-pill">01</span>
+            <span class="step-text"><strong>Load:</strong> Load GPT2LMHeadModel and GPT2Tokenizer. Extract <code style="font-family:var(--mono)">model.lm_head.weight</code> as W_U (shape: 50257×768). Also extract <code style="font-family:var(--mono)">model.transformer.ln_f</code> for the final LayerNorm. Set model to eval mode.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">02</span>
+            <span class="step-text"><strong>Choose prompt:</strong> "The president of the United States lives in the ___". The expected answer is " White" (as in White House). Encode the prompt and get the target token ID for " White".</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">03</span>
+            <span class="step-text"><strong>Forward pass:</strong> Run the model with <code style="font-family:var(--mono)">output_hidden_states=True</code>. Get the 13-element tuple of hidden states.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">04</span>
+            <span class="step-text"><strong>Logit lens loop:</strong> For each layer l (0–12), extract the last-token hidden state, apply ln_f, multiply by W_U.T, and find the rank of " White" in the sorted logits. Store ranks in a list.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">05</span>
+            <span class="step-text"><strong>Find transition layer:</strong> The transition layer is the first layer where rank ≤ 5 (or ≤ 10 if the signal is weak). Report this layer number and the logit probability at that layer.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">06</span>
+            <span class="step-text"><strong>Plot:</strong> Plot rank vs. layer depth. Use a log scale for the rank axis. Add a horizontal dashed line at rank=5 to mark the transition threshold. Label the transition layer with a vertical dashed line.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">07</span>
+            <span class="step-text"><strong>Counterfactual:</strong> Repeat for the counterfactual prompt "The president of France lives in the ___" (expected answer: " Elysée" or " élysée"). Compare the transition layers. Does the factual content (US vs France) change which layer is responsible for the prediction?</span>
+          </li>
+        </ol>
+        <p><strong>Expected outputs:</strong> For "The president of the United States lives in the ___", " White" should start at rank > 1000 at layer 0, drop to rank < 100 by layer 6–7, and reach rank 1–3 by layer 10–11. The transition layer (rank ≤ 5 first reached) should be between layers 8 and 11. For the France counterfactual, the transition layer may be different, or the correct answer may not rank as high at all, depending on how well-represented French presidential geography is in GPT-2's training data.</p>
+        <p><strong>Success criteria:</strong> A complete working implementation of the logit lens loop that correctly computes ranks at all 13 layers. A clear rank-vs-layer plot with the transition layer identified. A comparison table showing transition layers for at least 3 different prompts (US president, France president, capital of Japan).</p>
+        <p><strong>Reflection questions:</strong> Why might the rank fluctuate between layers rather than monotonically decreasing? What does a layer that increases the rank (moves " White" further down the list) mean computationally? Is it possible for a layer to have a large norm contribution (as measured in Lesson 3) but a small logit lens effect on the target token? What would that mean?</p>
+        <p><strong>Stretch goal:</strong> Implement direct logit attribution. For each layer, compute the scalar W_U[" White"] · Δ_attn_l and W_U[" White"] · Δ_mlp_l to decompose the logit into attention and MLP contributions per layer. Plot a signed bar chart: which layers add positive evidence for " White" and which remove it? This requires either using TransformerLens (which makes this trivial) or manually extracting the attention and MLP outputs from the Hugging Face model's internal tensors using forward hooks.</p>
+        <div class="callout callout-violet">
+          <div class="callout-label">Uncertainty Note</div>
+          <p>The logit lens assumes that the final LayerNorm (ln_f) and the unembedding W_U are appropriate to apply at all intermediate layers. This assumption is cleanest for tied-weight models like GPT-2 and becomes less valid for models with separate embedding and unembedding matrices. Additionally, the logit lens is a correlation tool, not a causal tool: it shows you when information is present in the residual stream, but not whether that information was causally produced by that layer or simply passed through from an earlier layer. Use activation patching (setting a layer's output to a counterfactual value) to test causal hypotheses.</p>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ ARTIFACT -->
+    <section id="artifact" class="lesson-section">
+      <h2>Real Model Artifact</h2>
+      <p>GPT-2's language model head (<code style="font-family:var(--mono)">model.lm_head</code>) is a single linear layer with no bias: a matrix multiplication from 768 dimensions to 50,257 dimensions. Because GPT-2 uses tied weights, this matrix is the same object in memory as the token embedding matrix <code style="font-family:var(--mono)">model.transformer.wte</code>. This weight tying is not a coincidence—it is a deliberate architectural choice that substantially reduces the parameter count (saving ~38.6M parameters that would otherwise be needed for a separate unembedding matrix) while maintaining or improving performance.</p>
+      <p>GPT-2's perplexity on standard benchmarks provides concrete reference points for the prediction quality: GPT-2-small achieves approximately 35 perplexity on Penn Treebank (PTB); GPT-2-medium achieves ~26; GPT-2-large achieves ~22; GPT-2-XL achieves ~18. Human-estimated perplexity on PTB is approximately 15. This means GPT-2-XL is close to human-level word prediction performance—it is surprised by roughly the same words, and to roughly the same degree, as a human reader. However, perplexity on PTB is not the same as "understanding"—it measures next-word prediction, which can be done by shallow distributional patterns without deep semantic comprehension.</p>
+      <p>A specific calibrated data point: for the prompt "The Eiffel Tower is in", GPT-2-large assigns log-probability approximately −0.84 to the token " Paris" (corresponding to a probability of approximately 0.43). This means GPT-2-large considers " Paris" to be the most likely next token, with 43% of its probability mass, followed by " France" at approximately 17% and " London" at approximately 5%. The remaining ~35% is distributed across thousands of other tokens. GPT-2-small assigns a somewhat lower probability to " Paris" (~0.31) and more uncertainty, reflecting the smaller model's weaker factual recall.</p>
+      <p>The final LayerNorm before the language head (<code style="font-family:var(--mono)">model.transformer.ln_f</code>) is a single LayerNorm applied to the final residual stream before the unembedding projection. This normalisation is important for the calibration of the logits: without it, the raw residual stream's scale would directly affect the sharpness of the output distribution. The learned scale parameter γ of this final LayerNorm has a mean value near 1.0 and standard deviation ~0.3 across the 768 dimensions, meaning most dimensions are near their original scale but some have been selectively amplified (up to ~4×) or dampened (down to ~0.1×). Dimensions with large γ values are "louder" in the final logit computation—they contribute disproportionately to the unembedding projection.</p>
+      <div class="callout callout-green">
+        <div class="callout-label">Perplexity Reference</div>
+        <p>GPT-2 model size vs. Penn Treebank perplexity: Small (117M) → ~35 PPL · Medium (345M) → ~26 PPL · Large (762M) → ~22 PPL · XL (1.5B) → ~18 PPL · Human → ~15 PPL. Each doubling of model size roughly halves the gap to human performance. This scaling relationship was a key motivation for the scaling laws research that preceded GPT-3 and GPT-4.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ ASSESSMENT -->
+    <section id="assessment" class="lesson-section">
+      <h2>Assessment Check</h2>
+      <div class="assessment-box">
+        <h3>Scenario 1: Early Logit Lens Saturation</h3>
+        <p><strong>Scenario:</strong> You run the logit lens on the prompt "The sky is ___" and find that the target token " blue" reaches rank 1 at layer 2 (out of 12) and stays there through all subsequent layers. A colleague says: "This means layers 3–12 are doing nothing useful for this prediction and could be removed for efficiency." You are skeptical.</p>
+        <p><strong>Question:</strong> Why is the early saturation happening? Does it mean layers 3–12 are computationally unnecessary? What would a proper ablation experiment test?</p>
+        <p><strong>What a strong answer demonstrates:</strong> The strong answer explains that early rank-1 saturation for trivially predictable completions is expected and does not imply the later layers are unnecessary. The phrase "The sky is ___" is a very high-frequency pattern in GPT-2's training data, and the embedding layer + first few attention layers have sufficient statistical signal to predict " blue" reliably. But this tells us nothing about whether layers 3–12 contribute to other aspects of the completion (e.g., ensuring the rest of the sentence is grammatically coherent) or to other, harder inputs. The logit lens only measures a single target token at a single position—it does not measure all the computation being done by later layers on other tokens or for other purposes. A proper ablation would: (1) remove layers 3–12 and measure performance on a diverse benchmark (not just "sky is blue" type prompts); (2) specifically test on out-of-distribution inputs where the simple statistics fail (e.g., "The sky at night is ___"); (3) measure calibration, not just rank—are the logit probabilities well-calibrated after ablation?. Additionally, even if the rank is 1 at layer 2, the probability at layer 2 may be much lower than at layer 12—layers 3–12 may be increasing confidence without changing the rank, which matters for calibration and generation quality.</p>
+      </div>
+      <div class="assessment-box">
+        <h3>Scenario 2: Perplexity Gap as Memorisation Indicator</h3>
+        <p><strong>Scenario:</strong> A model achieves perplexity 8 on its training data but perplexity 45 on held-out test data—a 5.6× gap that is much larger than the typical 1.2–1.5× gap for well-regularised language models. A team wants to use mechanistic interpretability to diagnose whether this is memorisation of training sequences.</p>
+        <p><strong>Question:</strong> What mechanistic hypotheses could explain this train-test perplexity gap? How would you test each hypothesis using interpretability tools?</p>
+        <p><strong>What a strong answer demonstrates:</strong> The strong answer enumerates at least three mechanistic hypotheses with specific testable predictions: (1) MLP-layer memorisation of training sequences. Geva et al. (2021) showed that MLP layers store key-value memories. If specific training sequences are memorised, specific MLP neurons should activate strongly for training-data tokens but weakly for test-data tokens. Test by identifying the top-activating MLP neurons for training prompts and measuring their activation distributions on test data—a bimodal distribution (high for train, low for test) would be diagnostic. (2) Attention-pattern overfitting to training-data token distributions. If attention heads have learned specific patterns that only occur in training data (e.g., attending to specific positional patterns unique to the corpus), they will fail on test data. Test by visualising attention patterns on train vs. test inputs and measuring the KL divergence between the attention distributions. (3) Embedding-space collapse to training data. If the embedding space has shrunk to cover only training-data token distribution, test-data tokens that are rare in training will have poorly-trained embeddings that produce high perplexity. Test by measuring the average embedding norm for high-perplexity test tokens vs. low-perplexity test tokens—if memorisation is the cause, high-perplexity tokens should have systematically lower embedding norms (under-trained).</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ REFERENCES -->
+    <section id="references" class="lesson-section">
+      <h2>References</h2>
+      <ul class="ref-list">
+        <li>Radford, A., Wu, J., Child, R., Luan, D., Amodei, D., & Sutskever, I. (2019). Language models are unsupervised multitask learners. <em>OpenAI Blog</em> — GPT-2, perplexity benchmarks, weight tying.</li>
+        <li>Vaswani, A., Shazeer, N., Parmar, N., et al. (2017). Attention is all you need. <em>NeurIPS 2017</em>. arXiv:1706.03762 — Original transformer; causal masking; cross-entropy loss.</li>
+        <li>Nostalgebraist (2020). Interpreting GPT: the logit lens. <em>LessWrong blog</em> — First systematic application and analysis of the logit lens technique.</li>
+        <li>Dar, G., Geva, M., Gupta, A., & Berant, J. (2022). Analyzing transformers in embedding space. <em>ACL 2023</em>. arXiv:2209.02535 — Theoretical analysis of logit lens and embedding space interpretation.</li>
+        <li>Graves, A., Fernández, S., Gomez, F., & Schmidhuber, J. (2006). Connectionist temporal classification: Labelling unsegmented sequence data with recurrent neural networks. <em>ICML 2006</em> — Introduces CTC loss and the blank token.</li>
+        <li>Elhage, N., Nanda, N., Olsson, C., et al. (2021). A mathematical framework for transformer circuits. <em>Transformer Circuits Thread</em> — Direct logit attribution; residual stream decomposition.</li>
+        <li>Holtzman, A., Buys, J., Du, L., Forbes, M., & Choi, Y. (2020). The curious case of neural text degeneration. <em>ICLR 2020</em>. arXiv:1904.09751 — Nucleus (top-p) sampling; analysis of decoding strategies.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ NEXT -->
+    <section id="next" class="lesson-section">
+      <h2>Next Step</h2>
+      <p>You have now completed Track 1: Foundations. You understand the full pipeline from raw input to predicted output—tokenization converts text into integer IDs; embeddings map IDs to vectors in the initial residual stream; transformer layers accumulate attention and MLP contributions to the residual stream; and the unembedding head projects the final residual stream to a probability distribution over the vocabulary. You can implement the logit lens, understand direct logit attribution, and reason about perplexity, cross-entropy, and decoding strategies.</p>
+      <p>Track 2: Attention Mechanics builds on this foundation with a deep dive into the attention mechanism itself. You will learn how attention heads compute query-key-value products, what "induction heads" are and how they implement in-context learning, how to read and interpret attention patterns, and how to identify specific head types (copying heads, previous-token heads, name-mover heads) in circuits that implement real model behaviors. The tools you have learned in Track 1—hidden state extraction, logit lens, residual stream decomposition—become the building blocks for the richer circuit-level analyses in Track 2.</p>
+      <a href="../track2/attention-mechanics.html" class="next-btn">Next: Attention Mechanics (Track 2) →</a>
+    </section>
+  </main>
+</div>
+<footer style="background:var(--ink);color:var(--cream);padding:3rem 2rem;margin-top:6rem;text-align:center;">
+  <p style="font-family:var(--mono);font-size:0.72rem;letter-spacing:0.1em;opacity:0.5;">MECHANISTIC INTERPRETABILITY ATLAS · TRACK 1: FOUNDATIONS</p>
+</footer>
+<script>
+const sections = document.querySelectorAll('.lesson-section');
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.remove('active'));
+      const active = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
