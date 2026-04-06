@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tokenization — MI Atlas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400;1,9..144,600&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../shared.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo">MI Atlas</a>
+    <ul class="nav-links">
+      <li><a href="../index.html">Home</a></li>
+      <li><a href="../index.html#tracks">Tracks</a></li>
+      <li><a href="../index.html#about">About</a></li>
+    </ul>
+  </div>
+</nav>
+<div class="lesson-wrapper">
+  <aside class="lesson-sidebar">
+    <span class="sidebar-title">In This Lesson</span>
+    <ul class="sidebar-nav">
+      <li><a href="#metadata">Metadata</a></li>
+      <li><a href="#outcomes">Learning Outcomes</a></li>
+      <li><a href="#setup">Conceptual Setup</a></li>
+      <li><a href="#intuition">Intuition First</a></li>
+      <li><a href="#technical">Technical Core</a></li>
+      <li><a href="#worked-example">Worked Example</a></li>
+      <li><a href="#mechint">Mech. Interpretation</a></li>
+      <li><a href="#exercise">Hands-on Exercise</a></li>
+      <li><a href="#artifact">Real Model Artifact</a></li>
+      <li><a href="#assessment">Assessment Check</a></li>
+      <li><a href="#references">References</a></li>
+      <li><a href="#next">Next Step</a></li>
+    </ul>
+  </aside>
+  <main class="lesson-content">
+    <div class="breadcrumb">
+      <a href="../index.html">Home</a>
+      <span>›</span>
+      <a href="../index.html#tracks">Track 1: Foundations</a>
+      <span>›</span>
+      Tokenization
+    </div>
+    <!-- ═══════════════════════════════════════════════════ METADATA -->
+    <section id="metadata" class="lesson-section">
+      <h2>Tokenization</h2>
+      <p style="font-family:var(--mono);font-size:0.8rem;color:#8a8680;margin-bottom:1.5rem;">Lesson 1 of 4 · Track 1: Foundations</p>
+      <div class="meta-box">
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Track</div>
+          <div style="font-weight:400;">Track 1: Foundations</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Lesson</div>
+          <div style="font-weight:400;">#1 of 4</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Prerequisites</div>
+          <div style="font-weight:400;">None — first lesson</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Est. Time</div>
+          <div style="font-weight:400;">45 minutes</div>
+        </div>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.62rem;letter-spacing:0.15em;text-transform:uppercase;color:#8a8680;margin-bottom:0.3rem;">Modalities</div>
+          <div style="font-weight:400;">Text · Vision · Speech</div>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ OUTCOMES -->
+    <section id="outcomes" class="lesson-section">
+      <h2>Learning Outcomes</h2>
+      <p>By the end of this lesson you will have built a working mental model of how neural networks convert raw input signals into the discrete indices that feed every downstream computation. These outcomes progress from conceptual understanding through technical detail to interpretability application.</p>
+      <ul class="outcomes-list">
+        <li>Explain why tokenization is the foundational unit of analysis in mechanistic interpretability and how tokenizer choice constrains what a model can represent.</li>
+        <li>Describe the three major historical stages of tokenization—character-level, word-level, and subword—and articulate the practical trade-offs that drove the field toward subword methods.</li>
+        <li>Step through the Byte-Pair Encoding (BPE) algorithm manually, deriving merge rules from a toy corpus and applying them to novel text.</li>
+        <li>Distinguish between BPE, WordPiece, and SentencePiece at both algorithmic and practical levels, including which models use which and why.</li>
+        <li>Identify tokenization-induced artifacts—fragmented numbers, inconsistent capitalisation handling, cross-lingual disparities—and reason about their downstream effects on model behavior.</li>
+        <li>Apply the <code style="font-family:var(--mono);font-size:0.9em;">transformers</code> library to tokenize text and inspect vocabulary statistics for GPT-2 and BERT.</li>
+        <li>Connect tokenization to the multimodal setting: explain patch tokenization in Vision Transformers and acoustic-frame extraction in speech models such as wav2vec 2.0.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ SETUP -->
+    <section id="setup" class="lesson-section">
+      <h2>Conceptual Setup</h2>
+      <p>Before a neural network can process language, it must convert raw symbols—characters, subwords, whole words, or even acoustic waveforms—into discrete integer indices that serve as keys into a learned lookup table. This first transformation is tokenization, and it is far more consequential than it might initially appear. Tokenization does not merely encode text into numbers; it partitions the infinite space of possible strings into a finite vocabulary of atomic units. Every decision the model makes downstream is built on top of, and fundamentally constrained by, the vocabulary the tokenizer defines.</p>
+      <p>From the perspective of mechanistic interpretability, the token is the atomic unit of analysis. When researchers study which circuit in a transformer computes a particular behavior, they frame their questions at the token level: "which token positions write information to the residual stream?", "which heads attend to which source tokens?", "does deleting this token from the context change the output?". If the tokenizer fragments a word unexpectedly—say, splitting "Paris" into ["Par", "is"] in some context—the circuit-level story must account for that fragmentation. You cannot understand a model's representation of the world without first understanding how that world has been carved up by the tokenizer.</p>
+      <p>The history of tokenization reflects a series of practical compromises. The earliest neural language models used <em>character-level</em> tokenization: each character (a–z, digits, punctuation) is its own token, keeping the vocabulary tiny (~100 tokens) but requiring the model to learn that "c", "a", "t" together mean something, and that "c", "a", "r" means something different. This puts enormous pressure on the model's capacity and sequence length. At the other extreme, <em>word-level</em> tokenization assigns a unique token to every distinct word in the training corpus. This vocabulary can easily exceed a million types in a multilingual setting, and any word not seen during training is out-of-vocabulary (OOV)—an unknown token that strips the model of all information about the word's spelling and morphology.</p>
+      <p><em>Subword tokenization</em>—pioneered by Byte-Pair Encoding (BPE) and later refined by WordPiece and SentencePiece—sits between these extremes. Common words get single tokens; rare or novel words are decomposed into meaningful subword fragments. "unbelievable" might become ["un", "##believ", "##able"], preserving morphological structure that the model can exploit. Subword methods achieve vocabulary sizes of 30,000–50,000 tokens, which is large enough to cover the vast majority of everyday text yet small enough that every token sees substantial training data. Understanding the mechanics of subword tokenization is the first step toward understanding everything that comes after in a modern neural language model.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ INTUITION -->
+    <section id="intuition" class="lesson-section">
+      <h2>Intuition First</h2>
+      <p>Think of a tokenizer as a very specialized dictionary—one that was itself built by reading all the text in a large corpus and asking: "what are the most useful units of meaning I can extract?". A conventional dictionary lists whole words. A tokenizer's dictionary lists fragments of words, ordered by how useful it would be to treat them as single units. The most frequent short sequences get their own entries. Long, rare sequences get decomposed into combinations of shorter entries.</p>
+      <p>BPE makes this dictionary-building process concrete by treating it as a compression problem. Imagine you have a corpus represented as a sequence of individual characters. BPE asks: "which pair of adjacent characters appears together most frequently?" If "e" and "r" appear together far more often than any other pair, merge them into a new token "er". Now your corpus contains both individual characters and the merged unit "er". Repeat: find the most frequent adjacent pair in this new representation, merge it, and add it to the vocabulary. After tens of thousands of such merges, you have a vocabulary where common English words like "the", "and", "of" are single tokens, common morphemes like "ing", "tion", "un" are single tokens, and rare words are still decomposed into smaller pieces that are separately represented.</p>
+      <p>The key intuition is that BPE discovers regularities in the corpus automatically, without any linguistic knowledge. It does not know that "un-" is a prefix or that "-tion" is a suffix. It simply observes that those character sequences appear together very often—and therefore compresses them. When you later inspect what tokens a BPE vocabulary contains, you discover that it has accidentally recovered much of the structure that linguists spent decades formalizing: morphemes, common function words, frequent syllables. This emergent structure is not accidental; it reflects genuine statistical regularities in the writing system.</p>
+      <p>The "Ġ" prefix you see in GPT-2 tokenizations (e.g., "Ġinter" for the word-initial "inter") is a space-encoding convention. GPT-2's BPE was trained on text where spaces were represented as a special character, causing "inter" at the start of a word to be a different token from "inter" within a compound. This means "interpret" (preceded by a space) is tokenized differently than "misinterpret" (where "inter" appears after "mis"). This is a concrete example of how tokenizer implementation choices create representational asymmetries that can affect model behavior in subtle ways.</p>
+      <div class="callout callout-amber">
+        <div class="callout-label">Key Insight</div>
+        <p>BPE is fundamentally a lossless compression algorithm applied to a text corpus. The "vocabulary" it builds is the optimal codebook for that compression. This means BPE tokenization is always corpus-specific: the same string will be tokenized differently by two BPE tokenizers trained on different data, even at the same vocabulary size.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ TECHNICAL -->
+    <section id="technical" class="lesson-section">
+      <h2>Technical Core</h2>
+      <p>The BPE algorithm begins with the simplest possible vocabulary: every unique character in the training corpus (plus a special end-of-word symbol). It then iteratively builds a larger vocabulary by merging the most frequent adjacent pair of symbols into a new compound symbol. The pseudocode below captures the essential loop:</p>
+      <pre class="code-block"><span class="cm"># Byte-Pair Encoding — core algorithm</span>
+<span class="kw">def</span> <span class="fn">train_bpe</span>(corpus, num_merges):
+    vocab = character_set(corpus)          <span class="cm"># {"a","b","c",...}</span>
+    merge_rules = []
+    <span class="kw">for</span> _ <span class="kw">in</span> range(num_merges):
+        pairs = count_pairs(corpus)        <span class="cm"># {("l","o"):5, ("o","w"):3, ...}</span>
+        <span class="kw">if not</span> pairs:
+            <span class="kw">break</span>
+        best = max(pairs, key=pairs.get)   <span class="cm"># e.g. ("l","o")</span>
+        new_token = <span class="st">""</span>.join(best)         <span class="cm"># "lo"</span>
+        vocab.add(new_token)
+        merge_rules.append(best)
+        corpus = apply_merge(corpus, best) <span class="cm"># replace ("l","o") with "lo"</span>
+    <span class="kw">return</span> vocab, merge_rules</pre>
+      <p>At inference time, BPE tokenization is applied greedily: start from characters and apply the learned merge rules in order. The rule that was learned first (most frequent during training) is applied first. This determinism is important: given the same merge-rule table, the tokenization of a string is always the same.</p>
+      <p><strong>WordPiece</strong>, used by BERT and its derivatives, differs from BPE in how it selects which pair to merge. Rather than maximising raw co-occurrence frequency, WordPiece selects the merge that maximises the likelihood of the training corpus under a unigram language model. This means it prefers merges that reduce perplexity, not just those that are frequent. In practice this yields a vocabulary where splits tend to occur at morphologically meaningful boundaries more often than in BPE.</p>
+      <p><strong>SentencePiece</strong>, used in models like T5, ALBERT, and LLaMA, takes a different approach entirely: it treats raw text as a stream of Unicode code points, including whitespace. There is no pre-tokenization step that splits on spaces. This makes SentencePiece language-agnostic—it works equally well for Chinese, Arabic, or Finnish, where word-boundary conventions differ radically from English. SentencePiece can use either BPE or a unigram language model as its underlying algorithm.</p>
+      <p><strong>Special tokens</strong> are non-text tokens injected by the tokenizer to encode structural information. BERT uses <code style="font-family:var(--mono)">[CLS]</code> (start of sequence, aggregated representation), <code style="font-family:var(--mono)">[SEP]</code> (sentence boundary), <code style="font-family:var(--mono)">[PAD]</code> (padding to fixed length), and <code style="font-family:var(--mono)">[MASK]</code> (masked-out token for pre-training). GPT-2 uses <code style="font-family:var(--mono)">&lt;|endoftext|&gt;</code> as the document separator. Newer instruction-tuned models add <code style="font-family:var(--mono)">&lt;|im_start|&gt;</code>/<code style="font-family:var(--mono)">&lt;|im_end|&gt;</code> to delimit conversation turns. From an interpretability standpoint, special tokens often develop highly specific roles—the CLS token in BERT aggregates sentence-level information that gets used by classification heads.</p>
+      <pre class="ascii-diagram">Raw Text: "The cat sat"
+     ↓  Tokenizer (BPE / WordPiece / SentencePiece)
+Token IDs: [464, 3797, 3332]
+     ↓  Embedding Lookup (matrix E ∈ ℝ^{V×d})
+Vectors: [v₁, v₂, v₃]  ∈ ℝ^{3×768}
+     ↓  + Positional Embedding
+Input to Layer 1: [x₁, x₂, x₃]  ∈ ℝ^{3×768}</pre>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Algorithm</th>
+            <th>Selection Criterion</th>
+            <th>Vocab Size</th>
+            <th>OOV Handling</th>
+            <th>Space Handling</th>
+            <th>Used By</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>BPE</td><td>Pair frequency</td><td>30k–50k</td><td>Char fallback</td><td>Ġ prefix or pre-split</td><td>GPT-2, RoBERTa, GPT-4</td></tr>
+          <tr><td>WordPiece</td><td>Likelihood gain</td><td>30k</td><td>##-prefix subwords</td><td>Pre-split on space</td><td>BERT, DistilBERT</td></tr>
+          <tr><td>SentencePiece</td><td>BPE or Unigram LM</td><td>32k</td><td>Byte fallback</td><td>▁ prefix (raw)</td><td>T5, LLaMA, ALBERT</td></tr>
+          <tr><td>Character</td><td>Single chars</td><td>~100–300</td><td>None needed</td><td>Explicit char</td><td>ByT5, CharFormer</td></tr>
+          <tr><td>Word</td><td>Whole words</td><td>50k–1M+</td><td>[UNK] token</td><td>Split on space</td><td>early NLP, word2vec</td></tr>
+        </tbody>
+      </table>
+      <div class="callout callout-rose">
+        <div class="callout-label">Failure Mode</div>
+        <p>Number tokenization is a well-documented BPE failure mode. The number "2048" may be tokenized as ["20", "48"] by GPT-2, meaning the model sees two tokens rather than a single numeric concept. This makes place-value arithmetic structurally difficult: the model must learn the place-value relationship implicitly from co-occurrence statistics rather than having it encoded in the token boundary. Models trained with dedicated numeric tokenization schemes (e.g., one token per digit) show substantially better arithmetic performance on controlled benchmarks.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ WORKED EXAMPLE -->
+    <section id="worked-example" class="lesson-section">
+      <h2>Worked Example</h2>
+      <p>Let us trace exactly how GPT-2's BPE tokenizer handles the phrase "mechanistic interpretability". This is a useful example because the phrase itself is central to the field, and both words are long and technical—exactly the kind of vocabulary that benefits from subword decomposition.</p>
+      <p>GPT-2's vocabulary was built from a 40GB corpus called WebText (Reddit outlinks). Neither "mechanistic" nor "interpretability" appears frequently enough in that corpus to be assigned a dedicated token. Instead, BPE decomposes them into subwords that do appear frequently. The space before "mechanistic" is also encoded as part of the first subword token, using the Ġ convention.</p>
+      <ol class="step-list">
+        <li class="step-item">
+          <span class="step-pill">01</span>
+          <span class="step-text">Load GPT-2 tokenizer from the Hugging Face Hub. This downloads the vocabulary file (50,257 entries) and the merge rules file (~50,000 merge rules).</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">02</span>
+          <span class="step-text">Call <code style="font-family:var(--mono)">tokenizer.tokenize(text)</code> to see the string tokens. This applies merge rules in training order to the character sequence.</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">03</span>
+          <span class="step-text">Call <code style="font-family:var(--mono)">tokenizer.encode(text)</code> to see the integer IDs. Each string token maps to a unique integer in [0, 50256].</span>
+        </li>
+        <li class="step-item">
+          <span class="step-pill">04</span>
+          <span class="step-text">Inspect the token boundaries. Notice where the breaks occur and ask: does this fragmentation preserve the morphological structure of the word?</span>
+        </li>
+      </ol>
+      <pre class="code-block"><span class="kw">from</span> transformers <span class="kw">import</span> GPT2Tokenizer
+tokenizer = GPT2Tokenizer.from_pretrained(<span class="st">"gpt2"</span>)
+text = <span class="st">"mechanistic interpretability"</span>
+tokens = tokenizer.tokenize(text)
+ids    = tokenizer.encode(text)
+<span class="fn">print</span>(tokens)
+<span class="cm"># ['mech', 'an', 'istic', 'Ġinter', 'pret', 'ability']</span>
+<span class="fn">print</span>(ids)
+<span class="cm"># [647, 272, 2569, 39555, 42871, 1799]</span>
+<span class="cm"># Verify round-trip:</span>
+<span class="fn">print</span>(tokenizer.decode(ids))
+<span class="cm"># 'mechanistic interpretability'</span>
+<span class="cm"># Inspect individual token frequencies by rank:</span>
+<span class="kw">for</span> tok, tid <span class="kw">in</span> zip(tokens, ids):
+    <span class="fn">print</span>(<span class="fn">f</span><span class="st">"{tok!r:20s} → id {tid:6d}"</span>)</pre>
+      <p>The split "mech" + "an" + "istic" reveals that GPT-2's training data did not contain "mechanistic" frequently enough to warrant a single merge, but "mech" (appearing in "mechanical", "mechanic", etc.) and "an" (an extremely common English fragment) were worth preserving independently. The leading Ġ on "Ġinter" signals that "inter" here begins a word following a space—a different token from the same characters mid-word, ensuring the model has a positional signal even at the tokenization level.</p>
+      <div class="callout callout-teal">
+        <div class="callout-label">Interpretability Note</div>
+        <p>When you are probing a model's representation of a word like "Paris", be aware that the string "Paris" (capital P, word-initial) may map to a different token ID than "paris" (lowercase) or " Paris" (with leading space). Always check your tokenization before interpreting experimental results. Capitalization-induced token splits are a common source of unexpected experimental artifacts in interpretability research.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ MECHINT -->
+    <section id="mechint" class="lesson-section">
+      <h2>Mechanistic Interpretation Layer</h2>
+      <p>Tokenization artifacts are not merely preprocessing curiosities—they have direct, measurable consequences for what circuits a model must learn and what behaviors it can exhibit. This section examines tokenization through three modalities: text, vision, and speech.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Text: Vocabulary Frequency and Embedding Quality</h3>
+      <p><strong>What is measured:</strong> Token frequency in the vocabulary. The frequency distribution of tokens in a training corpus follows a heavy-tailed distribution: a small number of tokens (common function words, morphemes) are extremely frequent, while the long tail of rare technical terms, proper nouns, and foreign words appears only a handful of times.</p>
+      <p><strong>Why it matters:</strong> Rare tokens have under-trained embeddings. An embedding vector is updated only when its token appears in the training batch. If a token appears 50 times across the entire training corpus, its embedding receives at most 50 gradient updates—not nearly enough to learn a rich, well-calibrated representation. When you run interpretability experiments on rare tokens, the embedding noise dominates the signal.</p>
+      <p><strong>Typical output:</strong> A vocabulary frequency histogram with a steep Zipfian curve—the top 1,000 tokens by frequency cover roughly 85–90% of all token occurrences in English text. Token rank plotted against log frequency is approximately linear (Zipf's law).</p>
+      <p><strong>Cautious interpretation:</strong> Do not confuse tokenization difficulty with model incapability. If GPT-2 struggles to handle the name "Khatri-Rao" correctly, the cause may be that this name gets fragmented into 5 tokens and never appeared in training—not that the model lacks the capacity for proper noun handling in principle. Ablations that swap in a different tokenizer can help disentangle these factors.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Vision: Patch Tokenization in Vision Transformers</h3>
+      <p><strong>What is measured:</strong> Patch token identity and spatial position. In a Vision Transformer (ViT), an input image of size 224×224 pixels is divided into non-overlapping 16×16-pixel patches. Each patch is flattened to a 256-dimensional vector (16×16 pixels × 1 channel for grayscale, or ×3 for RGB = 768 dimensions), then linearly projected to the model's hidden dimension. This projection is the visual analogue of the embedding matrix E in text models.</p>
+      <p><strong>Why it matters:</strong> The patch is ViT's atom. Everything the model learns about objects, textures, and spatial relationships is ultimately built from these 196 patch vectors (for a 224×224 image: 14×14 = 196 patches). One additional [CLS] token is prepended, giving 197 total tokens. Interpretability research on ViT must account for the patch structure: attention patterns, probing results, and attribution maps all need to be interpreted at patch-level resolution.</p>
+      <p><strong>Typical output:</strong> 197 tokens for a 224×224 input (196 patches + 1 CLS), each a vector in ℝ^768 for ViT-Base. The CLS token embedding at the final layer is passed to the classification head.</p>
+      <p><strong>Cautious interpretation:</strong> Patch boundaries are arbitrary divisions of the image grid and can artificially cut through objects. A 16×16 patch boundary might split a human face exactly through the nose, placing eyes in one token and mouth in another. This means features that require cross-patch integration (e.g., detecting symmetry across a face) must emerge from attention rather than being directly available in a single token. Do not assume the model has clean object representations in individual patch tokens.</p>
+      <h3 style="font-family:var(--display);font-weight:400;margin:2rem 0 1rem;">Speech: Acoustic Frame Extraction in wav2vec 2.0</h3>
+      <p><strong>What is measured:</strong> Frame-level acoustic features. wav2vec 2.0's architecture begins with a convolutional feature extractor that processes raw 16kHz audio waveforms. This CNN produces one feature vector per approximately 20 milliseconds of audio (50 frames per second). These dense, continuous feature vectors are the "acoustic tokens" before any quantization step.</p>
+      <p><strong>Why it matters:</strong> Unlike text, speech has no natural word boundaries at the acoustic level. There are no spaces between spoken words; the segmentation of audio into words and phonemes is itself a non-trivial learned skill. The frame-level representation is the model's raw input, and understanding which frames carry which information (phoneme identity, speaker identity, prosody, noise) is essential for interpreting the model's behavior on downstream ASR tasks.</p>
+      <p><strong>Typical output:</strong> A tensor of shape T×512, where T is the number of 20ms frames. For a 1-second audio clip at 16kHz, T ≈ 50. The feature vectors are not discrete tokens until the quantization module assigns each frame to a codebook entry—after that, the model processes codebook indices in a transformer, much like text token IDs.</p>
+      <p><strong>Cautious interpretation:</strong> The CNN feature extractor's outputs are not linguistically interpretable without further analysis. A single 20ms frame often captures a transition between phonemes rather than a stable phonemic state. Do not interpret individual frames as corresponding to specific phonemes without validating this with probing classifiers or force-alignment tools.</p>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ EXERCISE -->
+    <section id="exercise" class="lesson-section">
+      <h2>Hands-on Exercise</h2>
+      <div class="exercise-box">
+        <h3>Exercise: Manual BPE on a Toy Corpus</h3>
+        <p><strong>Task:</strong> Manually apply BPE merge rules to tokenize the corpus "low lower newest" at the character level, performing 5 merge steps by hand. Then compare your result against the <code style="font-family:var(--mono)">transformers</code> library.</p>
+        <ol class="step-list">
+          <li class="step-item">
+            <span class="step-pill">01</span>
+            <span class="step-text"><strong>Initialize:</strong> Represent the corpus at character level with an end-of-word marker: <code style="font-family:var(--mono)">["l","o","w","&lt;/w&gt;", "l","o","w","e","r","&lt;/w&gt;", "n","e","w","e","s","t","&lt;/w&gt;"]</code>. Count each word's frequency (assume each appears once).</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">02</span>
+            <span class="step-text"><strong>Count pairs:</strong> Tally all adjacent character pairs: (l,o)=2, (o,w)=2, (w,&lt;/w&gt;)=1, (w,e)=1, (e,r)=1, (r,&lt;/w&gt;)=1, (n,e)=1, (e,w)=1, (e,s)=1, (s,t)=1, (t,&lt;/w&gt;)=1.</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">03</span>
+            <span class="step-text"><strong>Merge 1:</strong> Pairs (l,o) and (o,w) are tied at frequency 2. Break ties by first occurrence; merge (l,o) → "lo". Vocabulary now includes "lo". Corpus: ["lo","w","&lt;/w&gt;", "lo","w","e","r","&lt;/w&gt;", "n","e","w","e","s","t","&lt;/w&gt;"].</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">04</span>
+            <span class="step-text"><strong>Merge 2:</strong> Recount. (lo,w)=2 is now most frequent. Merge → "low". Corpus: ["low","&lt;/w&gt;", "low","e","r","&lt;/w&gt;", "n","e","w","e","s","t","&lt;/w&gt;"].</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">05</span>
+            <span class="step-text"><strong>Merges 3–5:</strong> Continue with (e,r)=1, (e,s)=1, (s,t)=1 all tied at 1. Merge (e,r) → "er", then (e,s) → "es", then (s,t) → "st" (or (es,t)). After 5 merges: ["low", "&lt;/w&gt;", "low", "er", "&lt;/w&gt;", "n", "es", "t", "&lt;/w&gt;"] (final tokenization depends on tie-breaking).</span>
+          </li>
+          <li class="step-item">
+            <span class="step-pill">06</span>
+            <span class="step-text"><strong>Compare:</strong> Run the same strings through a GPT-2 tokenizer. Note where your hand-derived tokenization agrees or disagrees—GPT-2's tokenizer was trained on a vastly larger corpus, so "lower" is likely a single token there.</span>
+          </li>
+        </ol>
+        <p><strong>Expected outputs (after 5 merges):</strong> The word "low" should become a single token "low". "lower" should be "low" + "er" + end-of-word. "newest" should be "n" + "es" + "t" + end-of-word, or "n" + "e" + "w" + "es" + "t" depending on merge order. The exact result depends on how you break frequency ties.</p>
+        <p><strong>Success criteria:</strong> Your final tokenization should match within 1–2 tokens of a reference implementation. More importantly, you should be able to justify every merge decision with its frequency count.</p>
+        <p><strong>Reflection questions:</strong> Why does BPE produce different tokenizations for the same word in different contexts? (Hint: BPE applies merge rules in fixed order; context affects which adjacent pairs exist.) What does this mean for model generalization—should we expect a model to handle "lowering" as well as "lower"? Does the end-of-word marker matter for interpretability?</p>
+        <p><strong>Stretch goal:</strong> Implement the full BPE training loop in Python for this toy corpus. Extend it to handle a larger corpus (e.g., 1,000 words from Project Gutenberg) and compare your learned vocabulary against GPT-2's for common English words.</p>
+        <div class="callout callout-violet">
+          <div class="callout-label">Uncertainty Note</div>
+          <p>BPE tokenizations are deterministic given a fixed vocabulary and merge-rule table, but vocabulary construction depends on corpus statistics. Two BPE tokenizers trained on slightly different data will tokenize the same string differently. When comparing models, always check whether tokenizer differences might explain behavioral differences before attributing them to architecture or training objective.</p>
+        </div>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ ARTIFACT -->
+    <section id="artifact" class="lesson-section">
+      <h2>Real Model Artifact</h2>
+      <p>The GPT-2 tokenizer (released by OpenAI in 2019 alongside the GPT-2 language model) is one of the most widely studied tokenizers in interpretability research. Its vocabulary size is exactly 50,257—50,000 BPE merge steps starting from a 256-byte vocabulary, plus a special end-of-text token at index 50,256. The off-by-one (50,257 not 50,256) is a historical artifact of the vocabulary construction process.</p>
+      <p>The vocabulary was built from WebText, a dataset constructed by crawling all Reddit posts with at least three upvotes and scraping the linked web pages, yielding approximately 40GB of text. This corpus is heavily English-dominated and skewed toward the kind of informal, discursive writing found on Reddit—which means the tokenizer reflects the statistical regularities of that register. Technical and scientific vocabulary is underrepresented relative to its real-world use.</p>
+      <p>Some concrete statistics that matter for interpretability work: the most frequent 1,000 tokens by training-corpus frequency cover approximately 90% of all token occurrences in standard English text. Single-character tokens exist for every ASCII character (codes 0–127), ensuring that any string can be tokenized, even if individual characters must be used as fallback. The longest single token in GPT-2's vocabulary is "ologically" at 10 characters—a common English suffix that appears in dozens of high-frequency words ("biologically", "technologically", etc.) and therefore merited its own entry.</p>
+      <p>Token ID 50256 is <code style="font-family:var(--mono)">&lt;|endoftext|&gt;</code>, the document separator. It signals to the model that a new document is beginning. In attention pattern analysis, this token often acts as a "sink"—many attention heads have learned to attend heavily to the endoftext token as a no-op operation (similar to the SOS/EOS tokens in encoder-decoder models). This behavior is mechanistically interesting: the model appears to use the endoftext token as a place to "park" attention when no useful source position needs attending.</p>
+      <div class="callout callout-green">
+        <div class="callout-label">Artifact Insight</div>
+        <p>The vocabulary frequency distribution of GPT-2 follows Zipf's law closely: token rank r has frequency proportional to 1/r. This means the 1st most common token is twice as frequent as the 2nd, three times as frequent as the 3rd, and so on. Embeddings for low-rank (high-frequency) tokens are therefore much better trained than those for high-rank (rare) tokens—a systematic variation in representation quality that interpretability experiments should control for.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ ASSESSMENT -->
+    <section id="assessment" class="lesson-section">
+      <h2>Assessment Check</h2>
+      <div class="assessment-box">
+        <h3>Scenario 1: Arithmetic Difficulty</h3>
+        <p><strong>Scenario:</strong> A researcher benchmarks GPT-2 on a suite of simple arithmetic tasks (addition, subtraction, multiplication of 3-digit numbers) and finds the model performs at near-chance levels. They conclude: "GPT-2 doesn't understand numbers." A colleague challenges this interpretation.</p>
+        <p><strong>Question:</strong> What tokenization-based explanation should the colleague raise? How would you design an experiment to test whether tokenization is the primary bottleneck?</p>
+        <p><strong>What a strong answer demonstrates:</strong> The strong answer notes that multi-digit numbers like "2048" are tokenized by GPT-2 as ["20", "48"]—two subword tokens rather than a unified numeric concept. This means place-value arithmetic is structurally hard: the model must learn, from co-occurrence statistics, that "20" followed by "48" represents the number two-thousand-and-forty-eight, not twenty followed by forty-eight. A well-designed experiment would compare GPT-2 against a model using digit-level tokenization (one token per digit) on the same arithmetic tasks, controlling for model size and training data. It would also compare performance on numbers that happen to be single tokens in GPT-2's vocabulary (e.g., common numbers under 1000) vs. numbers that require multi-token decomposition. If tokenization is the bottleneck, performance should be substantially better for single-token numbers.</p>
+      </div>
+      <div class="assessment-box">
+        <h3>Scenario 2: Tokenizer Confound in Model Comparison</h3>
+        <p><strong>Scenario:</strong> You compare BERT-base and GPT-2-small on a coreference resolution benchmark. BERT achieves F1 = 73.2 and GPT-2 achieves F1 = 65.1, an 8.1-point gap. Your collaborator claims this proves BERT's architecture is better for coreference. You are skeptical.</p>
+        <p><strong>Question:</strong> Could tokenization differences explain part or all of this gap? What other confounds should be enumerated before drawing architectural conclusions?</p>
+        <p><strong>What a strong answer demonstrates:</strong> The strong answer identifies at least three distinct confounds beyond tokenization. First, tokenization: BERT uses WordPiece with [CLS] and [SEP] tokens providing explicit sentence-boundary signals, whereas GPT-2 provides no such structural cues. On coreference tasks that span sentence boundaries, [SEP] gives BERT an architectural advantage that is really a tokenizer advantage. Second, training objective: BERT is trained with masked language modeling and next-sentence prediction on book+Wikipedia data, both of which reward learning coreferential structure; GPT-2 is trained with causal language modeling on web text, which has a very different structural profile. Third, attention pattern: BERT is bidirectional and can attend from a pronoun to its antecedent (which typically precedes it), whereas GPT-2's causal mask prevents this. Attributing 8 points entirely to the tokenizer would be an overreach—tokenization alone is unlikely to explain the full gap—but the [SEP] token's contribution to sentence-boundary awareness is a real tokenizer-level effect that should be controlled for in a fair comparison.</p>
+      </div>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ REFERENCES -->
+    <section id="references" class="lesson-section">
+      <h2>References</h2>
+      <ul class="ref-list">
+        <li>Sennrich, R., Haddow, B., & Birch, A. (2016). Neural machine translation of rare words with subword units. <em>ACL 2016</em>. arXiv:1508.07909 — The original BPE paper for NLP tokenization.</li>
+        <li>Schuster, M., & Nakamura, K. (2012). Japanese and Korean voice search. <em>ICASSP 2012</em> — Introduces the WordPiece algorithm used in BERT.</li>
+        <li>Kudo, T., & Richardson, J. (2018). SentencePiece: A simple and language independent subword tokenizer and detokenizer for neural text processing. <em>EMNLP 2018</em>. arXiv:1808.06226.</li>
+        <li>Radford, A., Wu, J., Child, R., Luan, D., Amodei, D., & Sutskever, I. (2019). Language models are unsupervised multitask learners. <em>OpenAI Blog</em> — Introduces GPT-2 and its BPE tokenizer.</li>
+        <li>Dosovitskiy, A., Beyer, L., Kolesnikov, A., et al. (2020). An image is worth 16×16 words: Transformers for image recognition at scale. <em>ICLR 2021</em>. arXiv:2010.11929 — Introduces patch tokenization in ViT.</li>
+        <li>Baevski, A., Zhou, Y., Mohamed, A., & Auli, M. (2020). wav2vec 2.0: A framework for self-supervised learning of speech representations. <em>NeurIPS 2020</em>. arXiv:2006.11477.</li>
+        <li>Bostrom, K., & Durrett, G. (2020). Byte pair encoding is suboptimal for language model pretraining. <em>EMNLP Findings 2020</em>. arXiv:2004.03720 — Critical analysis of BPE for arithmetic and morphology.</li>
+      </ul>
+    </section>
+    <!-- ═══════════════════════════════════════════════════ NEXT -->
+    <section id="next" class="lesson-section">
+      <h2>Next Step</h2>
+      <p>You have established the foundational understanding of tokenization: how raw text, images, and audio are converted into discrete integer indices, the mechanics of BPE, WordPiece, and SentencePiece, and the interpretability consequences of tokenizer choice. The next lesson builds directly on this: once we have token IDs, we must convert them into the dense vectors that transformers actually compute with. This is the <em>embedding</em> transformation—the bridge between the discrete symbolic world and the continuous vector space where neural computation happens.</p>
+      <p>In the embeddings lesson you will learn how the embedding matrix E encodes semantic and syntactic relationships geometrically, what the Linear Representation Hypothesis says about feature directions in embedding space, and why the choice of positional embedding scheme (sinusoidal, learned, RoPE, ALiBi) has significant consequences for interpretability and length generalisation.</p>
+      <a href="embeddings.html" class="next-btn">Next: Embeddings →</a>
+    </section>
+  </main>
+</div>
+<footer style="background:var(--ink);color:var(--cream);padding:3rem 2rem;margin-top:6rem;text-align:center;">
+  <p style="font-family:var(--mono);font-size:0.72rem;letter-spacing:0.1em;opacity:0.5;">MECHANISTIC INTERPRETABILITY ATLAS · TRACK 1: FOUNDATIONS</p>
+</footer>
+<script>
+const sections = document.querySelectorAll('.lesson-section');
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(a => a.classList.remove('active'));
+      const active = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
